@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { Command } from "./Command.js";
 import { ProfileStore } from "../../core/ProfileStore.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
@@ -26,12 +27,14 @@ export class InstallCommand implements Command {
 
     if (this.sourceJson !== undefined) {
       profile.extraKnownMarketplaces[marketplace] = JSON.parse(this.sourceJson);
-      this.logger.debug(`Recorded explicit --source for marketplace '${marketplace}' on profile '${this.profileName}'.`);
+      this.logger.debug(
+        `Recorded explicit --source for marketplace '${pc.bold(marketplace)}' on profile '${pc.bold(this.profileName)}'.`
+      );
     } else if (!(marketplace in profile.extraKnownMarketplaces)) {
       const registered = await this.marketplaceRegistry.get(marketplace);
       if (registered !== undefined) {
         profile.extraKnownMarketplaces[marketplace] = registered;
-        this.logger.debug(`Resolved marketplace '${marketplace}' from the global registry.`);
+        this.logger.debug(`Resolved marketplace '${pc.bold(marketplace)}' from the global registry.`);
       } else {
         const cached = await this.knownMarketplacesCache.get(marketplace);
         if (cached === undefined) {
@@ -39,7 +42,7 @@ export class InstallCommand implements Command {
         }
         profile.extraKnownMarketplaces[marketplace] = cached;
         this.logger.debug(
-          `Resolved marketplace '${marketplace}' from Claude Code's local known_marketplaces.json ` +
+          `Resolved marketplace '${pc.bold(marketplace)}' from Claude Code's local known_marketplaces.json ` +
             `(run 'add-marketplace' to make this resolution explicit and stable).`
         );
         this.warnIfNonPortable(marketplace, cached);
@@ -48,13 +51,15 @@ export class InstallCommand implements Command {
 
     profile.enabledPlugins[full] = true;
 
+    this.logger.section();
     if (this.dryRun) {
-      this.logger.info(`[dry-run] Would install '${full}' into profile '${this.profileName}'.`);
+      this.logger.info(`${pc.dim("[dry-run]")} Would install '${pc.bold(full)}' into profile '${pc.bold(this.profileName)}'.`);
     } else {
       await this.profileStore.save(this.profileName, profile);
-      this.logger.info(`Installed '${full}' into profile '${this.profileName}'.`);
+      this.logger.info(`Installed '${pc.bold(full)}' into profile '${pc.bold(this.profileName)}'.`);
     }
 
+    this.logger.section();
     await this.pluginCacheInstaller.ensureCached([full], this.dryRun);
   }
 
@@ -65,8 +70,8 @@ export class InstallCommand implements Command {
     const kind = inner.source?.source;
     if (kind !== undefined && kind !== "github") {
       this.logger.warn(
-        `Marketplace '${marketplace}' was resolved from a '${kind}' source, which is machine-specific ` +
-          `and won't travel with this profile to another machine.`
+        `Marketplace '${pc.bold(marketplace)}' was resolved from a '${kind}' source.\n  ` +
+          `This is machine-specific and won't travel with this profile to another machine.`
       );
     }
   }

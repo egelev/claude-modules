@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import pc from "picocolors";
 import { promisify } from "node:util";
 import { KnownMarketplacesCache } from "./KnownMarketplacesCache.js";
 import { InstalledPluginsCache } from "./InstalledPluginsCache.js";
@@ -51,13 +52,13 @@ export class PluginCacheInstaller {
     const installed = await this.installedPluginsCache.keys();
     for (const pluginKey of pluginKeys) {
       if (installed.has(pluginKey)) {
-        this.logger.debug(`'${pluginKey}' already cached by Claude Code.`);
+        this.logger.debug(`'${pc.bold(pluginKey)}' already cached by Claude Code.`);
         continue;
       }
       if (dryRun) {
         this.logger.info(
-          `[dry-run] '${pluginKey}' is not cached by Claude Code — would run 'claude plugin install ${pluginKey} ` +
-            `--scope user -y'.`
+          `${pc.dim("[dry-run]")} '${pc.bold(pluginKey)}' is not cached by Claude Code — would run 'claude plugin ` +
+            `install ${pluginKey} --scope user -y'.`
         );
         continue;
       }
@@ -70,9 +71,9 @@ export class PluginCacheInstaller {
     const known = await this.knownMarketplacesCache.get(marketplace);
     if (known === undefined) {
       this.logger.warn(
-        `'${pluginKey}' isn't cached by Claude Code, and marketplace '${marketplace}' isn't in its ` +
-          `known_marketplaces.json either — run 'claude plugin marketplace add' for it, then retry, or a new ` +
-          `session in a repo using this profile will fail with 'not cached'.`
+        `'${pc.bold(pluginKey)}' isn't cached by Claude Code, and marketplace '${pc.bold(marketplace)}' isn't in ` +
+          `its known_marketplaces.json either.\n  Run 'claude plugin marketplace add' for it, then retry, or a ` +
+          `new session in a repo using this profile will fail with 'not cached'.`
       );
       return;
     }
@@ -80,13 +81,13 @@ export class PluginCacheInstaller {
     const result = await this.runClaude(["plugin", "install", pluginKey, "--scope", "user", "-y"], this.env);
     if (result.ok) {
       this.logger.info(
-        `Plugin '${pluginKey}' was not cached by Claude Code yet — installed it now via ` +
+        `Plugin '${pc.bold(pluginKey)}' was not cached by Claude Code yet — installed it now via ` +
           `'claude plugin install' (scope: user) so sessions in repos using this profile won't fail at startup.`
       );
     } else {
       this.logger.warn(
-        `Failed to install '${pluginKey}' into Claude Code's cache (${result.detail}). It's enabled in the ` +
-          `profile/settings, but a new session may fail with 'not cached' until you run ` +
+        `Failed to install '${pc.bold(pluginKey)}' into Claude Code's cache (${result.detail}).\n  It's enabled ` +
+          `in the profile/settings, but a new session may fail with 'not cached' until you run ` +
           `'claude plugin install ${pluginKey} --scope user' manually.`
       );
     }

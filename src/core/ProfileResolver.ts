@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { ProfileStore } from "./ProfileStore.js";
 import { MarketplaceSource } from "./types.js";
 import { MarketplaceConflictError } from "../util/errors.js";
@@ -42,7 +43,7 @@ export class ProfileResolver {
 
     if (enabledPluginNames.size === 0) {
       this.logger.warn(
-        `Selected profile(s) [${profileNames.join(", ")}] enable no plugins — every plugin in the target scope will be disabled.`
+        `Selected profile(s) [${pc.bold(profileNames.join(", "))}] enable no plugins — every plugin in the target scope will be disabled.`
       );
     }
 
@@ -65,7 +66,7 @@ export class ProfileResolver {
     }
 
     if (enabledPluginNames.size === 0) {
-      this.logger.warn(`Selected profile(s) [${profileNames.join(", ")}] enable no plugins — nothing to disable.`);
+      this.logger.warn(`Selected profile(s) [${pc.bold(profileNames.join(", "))}] enable no plugins — nothing to disable.`);
     }
 
     return enabledPluginNames;

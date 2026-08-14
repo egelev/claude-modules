@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { Command } from "./Command.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { parseMarketplaceSpec } from "../../core/marketplaceSpec.js";
@@ -19,10 +20,10 @@ export class AddMarketplaceCommand implements Command {
       const name = this.nameOverride ?? this.spec;
       const source = JSON.parse(this.sourceJson);
       if (this.dryRun) {
-        this.logger.info(`[dry-run] Would register marketplace '${name}' with an explicit --source.`);
+        this.logger.info(`${pc.dim("[dry-run]")} Would register marketplace '${pc.bold(name)}' with an explicit --source.`);
       } else {
         await this.marketplaceRegistry.set(name, source);
-        this.logger.info(`Registered marketplace '${name}' with an explicit --source.`);
+        this.logger.info(`Registered marketplace '${pc.bold(name)}' with an explicit --source.`);
       }
       return;
     }
@@ -42,15 +43,16 @@ export class AddMarketplaceCommand implements Command {
     }
 
     if (this.dryRun) {
-      this.logger.info(`[dry-run] Would register marketplace '${name}' from '${this.spec}'.`);
+      this.logger.info(`${pc.dim("[dry-run]")} Would register marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}'.`);
     } else {
       await this.marketplaceRegistry.set(name, source);
-      this.logger.info(`Registered marketplace '${name}' from '${this.spec}'.`);
+      this.logger.info(`Registered marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}'.`);
     }
     if (!/^[\w.-]+\/[\w.-]+$/.test(this.spec)) {
+      this.logger.section();
       this.logger.warn(
-        "The settings.json shape for non-GitHub marketplace sources is unverified against real Claude Code output — " +
-          "double-check the registered entry, or re-run with --source '<json>' if it's wrong."
+        "The settings.json shape for non-GitHub marketplace sources is unverified against real Claude Code output.\n  " +
+          "Double-check the registered entry, or re-run with --source '<json>' if it's wrong."
       );
     }
   }

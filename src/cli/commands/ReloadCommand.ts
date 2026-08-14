@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import pc from "picocolors";
 import { Command } from "./Command.js";
 import { ApplyProfilesUseCase } from "../../core/ApplyProfilesUseCase.js";
 import { ProfileListFile } from "../../core/ProfileListFile.js";
@@ -25,7 +26,7 @@ export class ReloadCommand implements Command {
     const listFilePath = this.filePath ? await this.resolveExplicitFile() : await this.findFileByUpwardSearch();
 
     const profileNames = await this.profileListFile.read(listFilePath);
-    this.logger.debug(`Reloading profiles [${profileNames.join(", ")}] from ${listFilePath}.`);
+    this.logger.debug(`Reloading profiles [${pc.bold(profileNames.join(", "))}] from ${pc.bold(listFilePath)}.`);
     await this.applyProfilesUseCase.run(profileNames, this.scope, this.cwd, false, this.dryRun);
   }
 

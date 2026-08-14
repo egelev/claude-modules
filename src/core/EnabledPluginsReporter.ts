@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { ScopeResolver } from "./ScopeResolver.js";
 import { SettingsRepository } from "./SettingsRepository.js";
 import { InstalledPluginsCache } from "./InstalledPluginsCache.js";
@@ -52,6 +53,7 @@ export class EnabledPluginsReporter {
     const cached = await this.installedPluginsCache.keys();
     const uncachedPluginKeys = new Set<string>();
 
+    this.logger.section();
     const current: ScopeSnapshot = { scope, path: settingsPath, settings };
     const moreSpecificScopes: ScopeSnapshot[] = [current];
     this.logScopeParagraph(current, [], false, dryRun, cached, uncachedPluginKeys);
@@ -60,6 +62,7 @@ export class EnabledPluginsReporter {
       const resolved = await this.scopeResolver.resolve(lessSpecificScope, cwd);
       const lessSpecificSettings = await this.settingsRepository.read(resolved.settingsPath);
       const snapshot: ScopeSnapshot = { scope: lessSpecificScope, path: resolved.settingsPath, settings: lessSpecificSettings };
+      this.logger.section();
       this.logScopeParagraph(snapshot, moreSpecificScopes, true, false, cached, uncachedPluginKeys);
       moreSpecificScopes.push(snapshot);
     }
@@ -84,13 +87,13 @@ export class EnabledPluginsReporter {
       const overriddenBy = moreSpecificScopes.find((s) => s.settings.enabledPlugins?.[name] === false);
       if (overriddenBy) {
         // Inactive here — a more-specific scope already disables it, so whether it's cached doesn't matter.
-        return `  - ${name} (overridden in ${overriddenBy.scope} scope)`;
+        return `  - ${pc.bold(name)} (overridden in ${overriddenBy.scope} scope)`;
       }
       if (!cached.has(name)) {
         uncachedPluginKeys.add(name);
-        return `  - ${name} (not cached by Claude Code — run 'claude plugin install ${name} --scope user -y')`;
+        return `  - ${pc.bold(name)} (not cached by Claude Code — run 'claude plugin install ${name} --scope user -y')`;
       }
-      return `  - ${name}`;
+      return `  - ${pc.bold(name)}`;
     });
 
     const label = isUpperScope
@@ -99,6 +102,6 @@ export class EnabledPluginsReporter {
         ? `Would be enabled in ${snapshot.scope} scope`
         : `Enabled plugin(s) in ${snapshot.scope} scope`;
     const body = lines.length > 0 ? lines.join("\n") : "  (none)";
-    this.logger.info(`${label} (${snapshot.path}):\n${body}`);
+    this.logger.info(`${label} (${pc.bold(snapshot.path)}):\n${body}`);
   }
 }

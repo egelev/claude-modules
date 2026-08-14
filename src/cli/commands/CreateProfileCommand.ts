@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { Command } from "./Command.js";
 import { ProfileStore } from "../../core/ProfileStore.js";
 import { Logger } from "../../util/Logger.js";
@@ -16,11 +17,11 @@ export class CreateProfileCommand implements Command {
       if (await this.profileStore.exists(this.name)) {
         throw new ProfileExistsError(this.name);
       }
-      this.logger.info(`[dry-run] Would create profile '${this.name}'.`);
+      this.logger.info(`${pc.dim("[dry-run]")} Would create profile '${pc.bold(this.name)}'.`);
       return;
     }
 
     await this.profileStore.create(this.name);
-    this.logger.info(`Created profile '${this.name}'.`);
+    this.logger.info(`Created profile '${pc.bold(this.name)}'.`);
   }
 }

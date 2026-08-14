@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { RepoLocator } from "./RepoLocator.js";
 import { ProfileListFile } from "./ProfileListFile.js";
 import { ProfileResolver } from "./ProfileResolver.js";
@@ -40,10 +41,11 @@ export class ProfileDriftReporter {
     settings: ClaudeSettings,
     cwd: string
   ): Promise<ProfileDriftReport> {
+    this.logger.section();
     const listFilePath = await this.findListFile(cwd);
     if (!listFilePath) {
       this.logger.info(
-        `No .claude-profiles file found for ${scope} scope (${settingsPath}) — skipping profile-drift check.`
+        `No .claude-profiles file found for ${scope} scope (${pc.bold(settingsPath)}) — skipping profile-drift check.`
       );
       return NO_DRIFT;
     }
@@ -52,12 +54,14 @@ export class ProfileDriftReporter {
     try {
       profileNames = await this.profileListFile.read(listFilePath);
     } catch (err) {
-      this.logger.warn(`Could not read ${listFilePath}: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(`Could not read ${pc.bold(listFilePath)}: ${err instanceof Error ? err.message : String(err)}`);
       return { ...NO_DRIFT, resolutionFailed: true };
     }
 
     if (profileNames.length === 0) {
-      this.logger.info(`${listFilePath} lists no profiles — nothing to compare against ${scope} scope (${settingsPath}).`);
+      this.logger.info(
+        `${pc.bold(listFilePath)} lists no profiles — nothing to compare against ${scope} scope (${pc.bold(settingsPath)}).`
+      );
       return NO_DRIFT;
     }
 
@@ -66,7 +70,7 @@ export class ProfileDriftReporter {
       ({ enabledPluginNames } = await this.profileResolver.resolve(profileNames));
     } catch (err) {
       this.logger.warn(
-        `Could not resolve listed profile(s) [${profileNames.join(", ")}] from ${listFilePath}: ` +
+        `Could not resolve listed profile(s) [${pc.bold(profileNames.join(", "))}] from ${pc.bold(listFilePath)}: ` +
           `${err instanceof Error ? err.message : String(err)}`
       );
       return { ...NO_DRIFT, resolutionFailed: true };
@@ -79,11 +83,13 @@ export class ProfileDriftReporter {
       .sort();
 
     this.logger.info(
-      `Profile list ${listFilePath} (profiles: ${profileNames.join(", ")}) vs ${scope} scope (${settingsPath}):`
+      `Profile list ${pc.bold(listFilePath)} (profiles: ${profileNames.join(", ")}) vs ${scope} scope (${pc.bold(settingsPath)}):`
     );
+    this.logger.section();
     this.logger.info(
       `Missing in ${scope} scope — the listed profile(s) want these enabled, but they aren't:\n${bulletList(missingPluginKeys)}`
     );
+    this.logger.section();
     this.logger.info(
       `Stale in ${scope} scope — enabled, but no listed profile declares them:\n${bulletList(stalePluginKeys)}`
     );
@@ -98,5 +104,5 @@ export class ProfileDriftReporter {
 }
 
 function bulletList(keys: readonly string[]): string {
-  return keys.length > 0 ? keys.map((key) => `  - ${key}`).join("\n") : "  (none)";
+  return keys.length > 0 ? keys.map((key) => `  - ${pc.bold(key)}`).join("\n") : "  (none)";
 }

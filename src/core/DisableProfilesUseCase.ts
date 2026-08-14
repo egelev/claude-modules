@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { ScopeResolver } from "./ScopeResolver.js";
 import { ProfileResolver } from "./ProfileResolver.js";
 import { SettingsRepository } from "./SettingsRepository.js";
@@ -24,14 +25,14 @@ export class DisableProfilesUseCase {
     const existing = await this.settingsRepository.read(resolvedScope.settingsPath);
     const updated = this.settingsApplier.disable(existing, pluginNames);
     if (dryRun) {
-      this.logger.info(`[dry-run] Would write ${resolvedScope.settingsPath} — no files modified.`);
+      this.logger.info(`${pc.dim("[dry-run]")} Would write ${pc.bold(resolvedScope.settingsPath)} — no files modified.`);
     } else {
       await this.settingsRepository.write(resolvedScope.settingsPath, updated);
     }
 
     const verb = dryRun ? "Would disable" : "Disabled";
     this.logger.info(
-      `${verb} profile(s) [${profileNames.join(", ")}] in ${resolvedScope.scope} scope (${resolvedScope.settingsPath}).`
+      `${verb} profile(s) [${pc.bold(profileNames.join(", "))}] in ${resolvedScope.scope} scope (${pc.bold(resolvedScope.settingsPath)}).`
     );
 
     await this.reporter.report(scope, resolvedScope.settingsPath, updated, cwd, dryRun);
@@ -43,13 +44,13 @@ export class DisableProfilesUseCase {
     const existing = await this.settingsRepository.read(resolvedScope.settingsPath);
     const updated = this.settingsApplier.disableAll(existing);
     if (dryRun) {
-      this.logger.info(`[dry-run] Would write ${resolvedScope.settingsPath} — no files modified.`);
+      this.logger.info(`${pc.dim("[dry-run]")} Would write ${pc.bold(resolvedScope.settingsPath)} — no files modified.`);
     } else {
       await this.settingsRepository.write(resolvedScope.settingsPath, updated);
     }
 
     const verb = dryRun ? "Would disable" : "Disabled";
-    this.logger.info(`${verb} all plugins in ${resolvedScope.scope} scope (${resolvedScope.settingsPath}).`);
+    this.logger.info(`${verb} all plugins in ${resolvedScope.scope} scope (${pc.bold(resolvedScope.settingsPath)}).`);
 
     await this.reporter.report(scope, resolvedScope.settingsPath, updated, cwd, dryRun);
   }

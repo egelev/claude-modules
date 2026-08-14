@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { Command } from "./Command.js";
 import { ProfileStore } from "../../core/ProfileStore.js";
 import { Logger } from "../../util/Logger.js";
@@ -19,7 +20,7 @@ export class ListProfilesCommand implements Command {
       const profile = await this.profileStore.load(name);
       const enabledCount = Object.values(profile.enabledPlugins).filter(Boolean).length;
       const marketplaceCount = Object.keys(profile.extraKnownMarketplaces).length;
-      this.logger.info(`${name} — ${enabledCount} plugin(s) enabled, ${marketplaceCount} marketplace(s)`);
+      this.logger.info(`${pc.bold(name)} — ${enabledCount} plugin(s) enabled, ${marketplaceCount} marketplace(s)`);
     }
   }
 }

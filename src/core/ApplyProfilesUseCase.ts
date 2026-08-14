@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { ResolvedScope, ScopeResolver } from "./ScopeResolver.js";
 import { ProfileResolver } from "./ProfileResolver.js";
 import { SettingsRepository } from "./SettingsRepository.js";
@@ -58,23 +59,26 @@ export class ApplyProfilesUseCase {
     }
 
     if (dryRun) {
-      this.logger.info(`[dry-run] Would write ${resolvedScope.settingsPath} — no files modified.`);
+      this.logger.info(`${pc.dim("[dry-run]")} Would write ${pc.bold(resolvedScope.settingsPath)} — no files modified.`);
     } else {
       await this.settingsRepository.write(resolvedScope.settingsPath, updated);
     }
 
     // Best-effort: catches plugins enabled by hand-editing a profile or syncing one from another
     // machine, which never went through `install`'s own cache check.
+    this.logger.section();
     await this.pluginCacheInstaller.ensureCached(union.enabledPluginNames, dryRun);
 
+    this.logger.section();
     const marketplaceCount = Object.keys(union.extraKnownMarketplaces).length;
     const verb = dryRun ? "Would enable" : "Enabled";
     this.logger.info(
-      `${verb} profile(s) [${profileNames.join(", ")}] in ${resolvedScope.scope} scope (${resolvedScope.settingsPath}); ` +
+      `${verb} profile(s) [${pc.bold(profileNames.join(", "))}] in ${resolvedScope.scope} scope (${pc.bold(resolvedScope.settingsPath)}); ` +
         `${marketplaceCount} marketplace(s) known.`
     );
 
     if (only) {
+      this.logger.section();
       if (lessSpecificScopes(scope).length === 0) {
         this.logger.warn(
           "--only has no effect in 'user' scope: it is the least specific scope, so there is nothing broader to override."
@@ -86,7 +90,7 @@ export class ApplyProfilesUseCase {
         for (const { scope: originScope, names } of overriddenByScope) {
           this.logger.info(
             `--only: ${overrideVerb} ${names.length} plugin(s) inherited from ${originScope} scope, by setting them to ` +
-              `false in ${resolvedScope.scope} scope (${resolvedScope.settingsPath}): ${names.join(", ")}`
+              `false in ${resolvedScope.scope} scope (${pc.bold(resolvedScope.settingsPath)}): ${pc.bold(names.join(", "))}`
           );
         }
       }

@@ -71,7 +71,9 @@ export class StatusCommand implements Command {
     if (problems.length > 0) {
       // Distinct from the default exitCode 1 (couldn't run at all, e.g. ScopeRequiredError) so a
       // CI/pre-session caller can tell "drift found" apart from "status itself failed".
-      throw new CliError(problems.join("\n"), 2);
+      this.logger.section();
+      const message = problems.map((problem, i) => (i === 0 ? problem : `  ${problem}`)).join("\n\n");
+      throw new CliError(message, 2);
     }
     this.logger.info(
       "All effectively-enabled plugins are cached by Claude Code, and settings.json matches the listed profile(s) (if any)."

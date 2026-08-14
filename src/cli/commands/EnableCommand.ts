@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { Command } from "./Command.js";
 import { ApplyProfilesUseCase } from "../../core/ApplyProfilesUseCase.js";
 import { ProfileListFile } from "../../core/ProfileListFile.js";
@@ -28,6 +29,7 @@ export class EnableCommand implements Command {
     );
 
     if (this.persist) {
+      this.logger.section();
       // Bare --persist (no explicit path) anchors to the same root settings.json was just resolved
       // against, so `reload` finds it regardless of which subdirectory it runs from. An explicit
       // --persist=<path> still resolves against cwd — a typed relative path should mean "relative
@@ -35,10 +37,10 @@ export class EnableCommand implements Command {
       const persistBaseDir = this.persistPath !== undefined ? this.cwd : (resolvedScope.repoRoot ?? this.cwd);
       if (this.dryRun) {
         const targetPath = this.profileListFile.resolvePath(persistBaseDir, this.persistPath);
-        this.logger.info(`[dry-run] Would persist profile selection to ${targetPath}.`);
+        this.logger.info(`${pc.dim("[dry-run]")} Would persist profile selection to ${pc.bold(targetPath)}.`);
       } else {
         const writtenPath = await this.profileListFile.write(persistBaseDir, this.profileNames, this.persistPath);
-        this.logger.info(`Persisted profile selection to ${writtenPath}.`);
+        this.logger.info(`Persisted profile selection to ${pc.bold(writtenPath)}.`);
       }
     }
   }
