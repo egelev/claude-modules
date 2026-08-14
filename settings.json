@@ -1,0 +1,10 @@
+{
+  "marketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "local",
+        "path": "claude-plugins-official"
+      }
+    }
+  }
+}
