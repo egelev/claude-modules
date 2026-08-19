@@ -18,13 +18,31 @@ export function lessSpecificScopes(scope: Scope): Scope[] {
   }
 }
 
+/**
+ * Every scope actually in effect at a location, most specific first — Claude Code's own model.
+ * `local` resolves against the current directory whether or not it's a repository (Claude Code
+ * itself watches `<cwd>/.claude/settings.local.json` unconditionally); `project` is meant to be
+ * shared via a repository, so it's absent outside one.
+ *
+ * Distinct from `lessSpecificScopes`, and the two are not interchangeable: this is "what decides
+ * whether a plugin loads here" (always the whole chain), whereas `lessSpecificScopes` answers
+ * "what can a write to *this* scope's file override" — see `enable --only`.
+ */
+export function applicableScopes(inRepo: boolean): Scope[] {
+  return inRepo ? [Scope.Local, Scope.Project, Scope.User] : [Scope.Local, Scope.User];
+}
+
 /** Opaque marketplace source descriptor — stored and compared verbatim, never interpreted. */
 export type MarketplaceSource = unknown;
 
-export interface Profile {
+export interface Module {
   enabledPlugins: Record<string, boolean>;
   extraKnownMarketplaces: Record<string, MarketplaceSource>;
+  composedModules: string[];
 }
+
+/** The flattened result of resolving a module's composition — never itself re-savable or re-resolvable. */
+export type EffectiveModule = Pick<Module, "enabledPlugins" | "extraKnownMarketplaces">;
 
 /** A Claude Code settings.json. Only enabledPlugins/extraKnownMarketplaces are understood; everything else passes through untouched. */
 export interface ClaudeSettings {
@@ -42,7 +60,7 @@ export interface MarketplaceRegistryFile {
 export interface KnownMarketplacesFile {
   [name: string]: {
     source: MarketplaceSource;
-    // Machine-specific materialized state — deliberately never copied onto a profile.
+    // Machine-specific materialized state — deliberately never copied onto a module.
     installLocation?: string;
     lastUpdated?: string;
   };
@@ -56,6 +74,6 @@ export interface InstalledPluginsFile {
   [key: string]: unknown;
 }
 
-export function emptyProfile(): Profile {
-  return { enabledPlugins: {}, extraKnownMarketplaces: {} };
+export function emptyModule(): Module {
+  return { enabledPlugins: {}, extraKnownMarketplaces: {}, composedModules: [] };
 }

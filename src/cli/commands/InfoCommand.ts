@@ -1,19 +1,27 @@
 import pc from "picocolors";
 import { Command } from "./Command.js";
-import { ProfileStore } from "../../core/ProfileStore.js";
+import { ModuleStore } from "../../core/ModuleStore.js";
 import { Logger } from "../../util/Logger.js";
 
 export class InfoCommand implements Command {
   constructor(
     private readonly name: string,
-    private readonly profileStore: ProfileStore,
+    private readonly moduleStore: ModuleStore,
     private readonly logger: Logger
   ) {}
 
   async execute(): Promise<void> {
-    const profile = await this.profileStore.load(this.name);
+    const module = await this.moduleStore.load(this.name);
 
-    const pluginEntries = Object.entries(profile.enabledPlugins);
+    if (module.composedModules.length > 0) {
+      this.logger.info(`${pc.bold(this.name)}: composes ${module.composedModules.length} module(s):`);
+      for (const composed of module.composedModules) {
+        this.logger.info(`  ${pc.bold(composed)}`);
+      }
+      this.logger.section();
+    }
+
+    const pluginEntries = Object.entries(module.enabledPlugins);
     if (pluginEntries.length === 0) {
       this.logger.info(`${pc.bold(this.name)}: no plugins enabled.`);
     } else {
@@ -24,7 +32,7 @@ export class InfoCommand implements Command {
     }
 
     this.logger.section();
-    const marketplaceEntries = Object.entries(profile.extraKnownMarketplaces);
+    const marketplaceEntries = Object.entries(module.extraKnownMarketplaces);
     if (marketplaceEntries.length === 0) {
       this.logger.info(`${pc.bold(this.name)}: no additional marketplaces known.`);
     } else {

@@ -10,7 +10,7 @@ export class KnownMarketplacesCache {
     const file = await this.readFile();
     const entry = file[name];
     // known_marketplaces.json entries are { source: <descriptor>, installLocation, lastUpdated };
-    // a profile's extraKnownMarketplaces entries are { source: <descriptor> } — re-wrap, don't copy verbatim.
+    // a module's extraKnownMarketplaces entries are { source: <descriptor> } — re-wrap, don't copy verbatim.
     return entry === undefined ? undefined : { source: entry.source };
   }
 

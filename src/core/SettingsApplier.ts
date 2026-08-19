@@ -1,12 +1,12 @@
 import { ClaudeSettings } from "./types.js";
-import { ResolvedProfiles } from "./ProfileResolver.js";
+import { ResolvedModules } from "./ModuleResolver.js";
 
 /**
  * Computes settings.json mutations for enabling/disabling plugins. Plugin keys are never removed,
  * only flipped between true/false; marketplaces are only ever added, never touched by disabling.
  */
 export class SettingsApplier {
-  apply(existing: ClaudeSettings, union: ResolvedProfiles): ClaudeSettings {
+  apply(existing: ClaudeSettings, union: ResolvedModules): ClaudeSettings {
     const enabledPlugins: Record<string, boolean> = {};
     for (const pluginKey of Object.keys(existing.enabledPlugins ?? {})) {
       enabledPlugins[pluginKey] = union.enabledPluginNames.has(pluginKey);

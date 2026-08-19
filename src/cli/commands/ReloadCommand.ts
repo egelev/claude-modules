@@ -1,37 +1,36 @@
 import { stat } from "node:fs/promises";
-import { resolve } from "node:path";
 import pc from "picocolors";
 import { Command } from "./Command.js";
-import { ApplyProfilesUseCase } from "../../core/ApplyProfilesUseCase.js";
-import { ProfileListFile } from "../../core/ProfileListFile.js";
-import { RepoLocator } from "../../core/RepoLocator.js";
+import { ApplyModulesUseCase } from "../../core/ApplyModulesUseCase.js";
+import { ModuleListFile } from "../../core/ModuleListFile.js";
 import { Scope } from "../../core/types.js";
-import { CliError, RepoRootRequiredError } from "../../util/errors.js";
+import { CliError } from "../../util/errors.js";
 import { Logger } from "../../util/Logger.js";
 
 export class ReloadCommand implements Command {
   constructor(
     private readonly scope: Scope,
     private readonly cwd: string,
-    private readonly repoLocator: RepoLocator,
-    private readonly profileListFile: ProfileListFile,
-    private readonly applyProfilesUseCase: ApplyProfilesUseCase,
+    private readonly moduleListFile: ModuleListFile,
+    private readonly applyModulesUseCase: ApplyModulesUseCase,
     private readonly logger: Logger,
     private readonly dryRun: boolean,
-    /** Explicit list file, bypassing the upward search. Resolved against `cwd` if relative. */
+    /** Explicit list file, bypassing scope-based resolution. Resolved against `cwd` if relative. */
     private readonly filePath?: string
   ) {}
 
   async execute(): Promise<void> {
-    const listFilePath = this.filePath ? await this.resolveExplicitFile() : await this.findFileByUpwardSearch();
+    const listFilePath = this.filePath ? await this.resolveExplicitFile() : await this.findScopeFile();
 
-    const profileNames = await this.profileListFile.read(listFilePath);
-    this.logger.debug(`Reloading profiles [${pc.bold(profileNames.join(", "))}] from ${pc.bold(listFilePath)}.`);
-    await this.applyProfilesUseCase.run(profileNames, this.scope, this.cwd, false, this.dryRun);
+    const moduleNames = await this.moduleListFile.read(listFilePath);
+    this.logger.debug(`Reloading modules [${pc.bold(moduleNames.join(", "))}] from ${pc.bold(listFilePath)}.`);
+    // install: true — reload has no --install flag of its own; this preserves its pre-existing
+    // unconditional best-effort install-cache attempt unchanged.
+    await this.applyModulesUseCase.run(moduleNames, this.scope, this.cwd, false, true, this.dryRun);
   }
 
   private async resolveExplicitFile(): Promise<string> {
-    const candidate = resolve(this.cwd, this.filePath!);
+    const candidate = this.moduleListFile.resolveExplicitPath(this.cwd, this.filePath!);
     const exists = await stat(candidate)
       .then((s) => s.isFile())
       .catch(() => false);
@@ -41,20 +40,18 @@ export class ReloadCommand implements Command {
     return candidate;
   }
 
-  private async findFileByUpwardSearch(): Promise<string> {
-    const repoRoot = await this.repoLocator.findRepoRoot(this.cwd);
-    if (!repoRoot) {
-      throw new RepoRootRequiredError("reload");
-    }
-
-    const listFilePath = await this.profileListFile.findUpward(this.cwd, repoRoot);
-    if (!listFilePath) {
+  /** Reads back whatever `enable --scope <same> --persist` wrote — one file per scope. */
+  private async findScopeFile(): Promise<string> {
+    const found = await this.moduleListFile.find(this.scope, this.cwd);
+    if (!found) {
       throw new CliError(
-        `No .claude-profiles file found between ${this.cwd} and repo root ${repoRoot}. ` +
-          `Run 'claude-profiles enable <profile...> --persist' to create one, or pass --file <path> to read one from ` +
-          `elsewhere.`
+        `No module list found for ${this.scope} scope (looked for ${await this.moduleListFile.searchDescription(
+          this.scope,
+          this.cwd
+        )}). Run 'claude-modules enable <module...> --scope ${this.scope} --persist' to create one, or pass ` +
+          `--file <path> to read one from elsewhere.`
       );
     }
-    return listFilePath;
+    return found;
   }
 }

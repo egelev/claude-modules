@@ -44,3 +44,24 @@ function inferNameFromPathLike(pathLike: string): string {
   const base = basename(pathLike.replace(/\/$/, "")).replace(/\.git$/, "");
   return base === "marketplace.json" ? basename(dirname(pathLike)) : base;
 }
+
+/**
+ * Reverses parseMarketplaceSpec: recovers a CLI-invokable spec string from a stored MarketplaceSource,
+ * for auto-running `claude plugin marketplace add`. Peeks the same double-nested shape
+ * marketplacePortability.ts already reads. Returns undefined for any source this tool didn't produce
+ * itself in a recognized shape (e.g. hand-authored --source '<json>' with an unfamiliar structure) —
+ * callers must treat that as "can't be auto-added", not as an error.
+ */
+export function marketplaceSpecFromSource(source: MarketplaceSource): string | undefined {
+  const inner = (source as { source?: { source?: string; repo?: string; url?: string; path?: string } })?.source;
+  switch (inner?.source) {
+    case "github":
+      return inner.repo;
+    case "git":
+      return inner.url;
+    case "local":
+      return inner.path;
+    default:
+      return undefined;
+  }
+}

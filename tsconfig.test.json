@@ -1,0 +1,14 @@
+{
+  // The build tsconfig deliberately compiles only src/ (rootDir: src). This one exists so the test
+  // suite is typechecked too — without it, a change to a production type leaves stale test code
+  // that vitest still runs, because esbuild strips types without checking them.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Widened from the build config's "src", which test/ and vitest.config.ts sit outside of.
+    // Harmless here because nothing is emitted.
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}

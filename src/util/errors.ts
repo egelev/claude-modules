@@ -9,28 +9,29 @@ export class CliError extends Error {
 }
 
 export class ScopeRequiredError extends CliError {
-  constructor() {
+  constructor(scope: string) {
     super(
-      "--scope is required outside of git repositories (could not determine a repo root; pass --scope user, or run this from inside a git repository)"
+      `--scope ${scope} requires a git repository (could not determine a repo root; use --scope local or ` +
+        "--scope user instead, or run this from inside a git repository)"
     );
   }
 }
 
-export class ProfileNotFoundError extends CliError {
+export class ModuleNotFoundError extends CliError {
   constructor(name: string) {
-    super(`Profile '${name}' does not exist. Run 'claude-profiles list' to see available profiles.`);
+    super(`Module '${name}' does not exist. Run 'claude-modules list' to see available modules.`);
   }
 }
 
-export class ProfileExistsError extends CliError {
+export class ModuleExistsError extends CliError {
   constructor(name: string) {
-    super(`Profile '${name}' already exists.`);
+    super(`Module '${name}' already exists.`);
   }
 }
 
-export class InvalidProfileNameError extends CliError {
+export class InvalidModuleNameError extends CliError {
   constructor(name: string) {
-    super(`Invalid profile name '${name}': must not contain '/', '\\', or '..'.`);
+    super(`Invalid module name '${name}': must not contain '/', '\\', or '..'.`);
   }
 }
 
@@ -44,28 +45,63 @@ export class UnknownMarketplaceError extends CliError {
   constructor(marketplace: string) {
     super(
       `Unknown marketplace '${marketplace}'. Provide --source '<json>' on this command, or register it first with ` +
-        `'claude-profiles add-marketplace ${marketplace}'.`
+        `'claude-modules marketplace add ${marketplace}'.`
     );
   }
 }
 
 export class MarketplaceNotFoundError extends CliError {
   constructor(name: string) {
-    super(`Marketplace '${name}' is not registered. Run 'claude-profiles add-marketplace ${name}' to register it.`);
+    super(`Marketplace '${name}' is not registered. Run 'claude-modules marketplace add ${name}' to register it.`);
   }
 }
 
-export class MarketplaceConflictError extends CliError {
-  constructor(marketplace: string, profileA: string, profileB: string) {
+export class CompositionCycleError extends CliError {
+  constructor(path: readonly string[]) {
     super(
-      `Marketplace '${marketplace}' is declared with different sources in profiles '${profileA}' and '${profileB}'. ` +
-        `Resolve the conflict in one of the profiles before applying them together.`
+      `Composition cycle detected: ${path.join(" -> ")}. A module cannot compose itself, directly or transitively.`
     );
   }
 }
 
-export class RepoRootRequiredError extends CliError {
-  constructor(context: string) {
-    super(`${context} requires a git repository, but no repo root could be found from the current directory.`);
+export class MarketplaceConflictError extends CliError {
+  constructor(marketplace: string, moduleA: string, moduleB: string) {
+    super(
+      `Marketplace '${marketplace}' is declared with different sources in modules '${moduleA}' and '${moduleB}'. ` +
+        `Resolve the conflict in one of the modules before applying them together.`
+    );
+  }
+}
+
+export interface ModuleImportCollision {
+  name: string;
+  kind: "root" | "composed";
+}
+
+export class ModuleImportCollisionError extends CliError {
+  constructor(collisions: readonly ModuleImportCollision[]) {
+    const lines = collisions.map(({ name, kind }) =>
+      kind === "root"
+        ? `  '${name}' (root) — rename the existing module, or re-run with --name <new-name>.`
+        : `  '${name}' (composed) — rename the existing module, or re-run with --composed-prefix <prefix>.`
+    );
+    super(
+      `Import would overwrite ${collisions.length} existing module(s):\n${lines.join("\n")}`
+    );
+  }
+}
+
+export class InvalidExportArchiveError extends CliError {
+  constructor(reason: string) {
+    super(`Not a valid module export archive: ${reason}`);
+  }
+}
+
+export class DuplicateImportNameError extends CliError {
+  constructor(name: string, originalNames: readonly string[]) {
+    super(
+      `Import would give more than one module the name '${name}' (from ${originalNames.join(", ")}). ` +
+        `Adjust --name and/or --composed-prefix so every imported module ends up with a distinct name.`
+    );
   }
 }

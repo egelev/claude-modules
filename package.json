@@ -1,23 +1,27 @@
 {
-  "name": "claude-profiles",
+  "name": "claude-modules",
   "version": "0.1.0",
-  "description": "Composable plugin profiles for Claude Code, applied across user/project/local scopes",
+  "description": "Composable plugin modules for Claude Code, applied across user/project/local scopes",
   "type": "module",
   "bin": {
-    "claude-profiles": "dist/claude-profiles.js"
+    "claude-modules": "dist/claude-modules.js"
   },
   "scripts": {
-    "dev": "CLAUDE_PROFILES_HOME=. tsx src/claude-profiles.ts",
+    "dev": "CLAUDE_MODULES_HOME=. tsx src/claude-modules.ts",
     "build": "tsc",
-    "postbuild": "chmod +x dist/claude-profiles.js",
-    "typecheck": "tsc --noEmit"
+    "postbuild": "chmod +x dist/claude-modules.js",
+    "typecheck": "tsc --noEmit && tsc --noEmit --project tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "tar": "^7.5.22"
   }
 }

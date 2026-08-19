@@ -4,7 +4,7 @@ import { atomicWriteFile, toJsonWithTrailingNewline } from "../util/atomicWrite.
 import { MarketplaceNotFoundError } from "../util/errors.js";
 import { MarketplaceRegistryFile, MarketplaceSource } from "./types.js";
 
-/** The global marketplace registry kept in $CLAUDE_PROFILES_HOME/settings.json, populated by `add-marketplace`. */
+/** The global marketplace registry kept in $CLAUDE_MODULES_HOME/settings.json, populated by `marketplace add`. */
 export class MarketplaceRegistry {
   constructor(private readonly paths: Paths) {}
 
