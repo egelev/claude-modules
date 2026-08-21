@@ -1,3 +1,12 @@
 node_modules/
 dist/
 coverage/
+
+# Artifacts written into the repo root when you run the CLI against this
+# checkout: `npm run dev` sets CLAUDE_MODULES_HOME=., and `local` scope
+# resolves to the repository root. None of these are project files.
+/settings.json
+/modules/
+/user.modules
+/.claude-modules
+/.claude-modules.local

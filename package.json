@@ -2,9 +2,35 @@
   "name": "claude-modules",
   "version": "0.1.0",
   "description": "Composable plugin modules for Claude Code, applied across user/project/local scopes",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "plugins",
+    "plugin-manager",
+    "cli",
+    "modules",
+    "marketplace",
+    "developer-tools"
+  ],
+  "homepage": "https://github.com/egelev/claude-modules#readme",
+  "bugs": {
+    "url": "https://github.com/egelev/claude-modules/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egelev/claude-modules.git"
+  },
+  "license": "MIT",
+  "author": "Emil Gelev",
   "type": "module",
   "bin": {
     "claude-modules": "dist/claude-modules.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
   },
   "scripts": {
     "dev": "CLAUDE_MODULES_HOME=. tsx src/claude-modules.ts",
