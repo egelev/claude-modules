@@ -82,7 +82,7 @@ export class Harness {
     };
   }
 
-  /** Canonical persisted-module-list path per scope — the layout `--persist` writes. */
+  /** Canonical saved-module-list path per scope — the layout `--save` writes. */
   moduleListPath(scope: "user" | "project" | "local"): string {
     if (scope === "user") return join(this.modulesHome, "user.modules");
     return join(this.repoRoot, scope === "project" ? ".claude-modules" : ".claude-modules.local");

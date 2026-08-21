@@ -4,9 +4,33 @@ import { SettingsRepository } from "../../core/SettingsRepository.js";
 import { EnabledPluginsReporter } from "../../core/EnabledPluginsReporter.js";
 import { ModuleDriftReporter } from "../../core/ModuleDriftReporter.js";
 import { EnabledPluginsVerifier } from "../../core/EnabledPluginsVerifier.js";
+import { ModuleListFile } from "../../core/ModuleListFile.js";
 import { Scope } from "../../core/types.js";
-import { CliError } from "../../util/errors.js";
+import { CliError, describeError } from "../../util/errors.js";
 import { Logger } from "../../util/Logger.js";
+
+interface StatusJsonPayload {
+  ok: boolean;
+  scope: Scope;
+  settingsPath: string;
+  checks: {
+    cache: { uncachedPluginKeys: string[] };
+    moduleList: {
+      listFilePath: string | null;
+      resolutionFailed: boolean;
+      missingPluginKeys: string[];
+      stalePluginKeys: string[];
+    };
+    verify:
+      | null
+      | {
+          ran: true;
+          unavailable: boolean;
+          unexpectedlyEnabled: string[];
+          unexpectedlyDisabled: string[];
+        };
+  };
+}
 
 /**
  * Read-only audit of live settings.json state against two independent sources of truth:
@@ -26,14 +50,29 @@ export class StatusCommand implements Command {
     private readonly settingsRepository: SettingsRepository,
     private readonly enabledPluginsReporter: EnabledPluginsReporter,
     private readonly moduleDriftReporter: ModuleDriftReporter,
+    private readonly moduleListFile: ModuleListFile,
     private readonly logger: Logger,
     /** Opt-in third check: cross-examine Claude Code's own resolution. Costs a subprocess. */
     private readonly verify: boolean,
-    private readonly enabledPluginsVerifier: EnabledPluginsVerifier
+    private readonly enabledPluginsVerifier: EnabledPluginsVerifier,
+    /** Print one JSON object to stdout instead of the human-readable report; exit code unchanged. */
+    private readonly json: boolean
   ) {}
 
   async execute(): Promise<void> {
-    const resolved = await this.scopeResolver.resolve(this.scope, this.cwd);
+    let resolved;
+    try {
+      resolved = await this.scopeResolver.resolve(this.scope, this.cwd);
+    } catch (err) {
+      // Every other failure path below still emits a JSON payload before throwing (or exits via the
+      // `problems.length > 0` branch, which also emits first) — a scope-resolution failure is the one
+      // path that used to throw before any JSON-emission code ran, leaving a CI script that
+      // unconditionally JSON.parse(stdout)s with an empty string instead of a clean signal.
+      if (this.json) {
+        process.stdout.write(`${JSON.stringify({ ok: false, error: describeError(err) })}\n`);
+      }
+      throw err;
+    }
     const settings = await this.settingsRepository.read(resolved.settingsPath);
 
     // Every check runs (and reports) before anything is thrown, so no one kind of drift hides
@@ -43,11 +82,18 @@ export class StatusCommand implements Command {
       resolved.settingsPath,
       settings,
       this.cwd,
-      false
+      false,
+      this.json
     );
-    const moduleDrift = await this.moduleDriftReporter.report(this.scope, resolved.settingsPath, settings, this.cwd);
+    const moduleDrift = await this.moduleDriftReporter.report(
+      this.scope,
+      resolved.settingsPath,
+      settings,
+      this.cwd,
+      this.json
+    );
     const verification = this.verify
-      ? await this.enabledPluginsVerifier.verify(effectivelyEnabledPluginKeys)
+      ? await this.enabledPluginsVerifier.verify(effectivelyEnabledPluginKeys, this.json)
       : undefined;
 
     const problems: string[] = [];
@@ -93,21 +139,56 @@ export class StatusCommand implements Command {
       }
     }
 
+    if (this.json) {
+      const listFilePath = (await this.moduleListFile.find(this.scope, this.cwd)) ?? null;
+      const payload: StatusJsonPayload = {
+        ok: problems.length === 0,
+        scope: this.scope,
+        settingsPath: resolved.settingsPath,
+        checks: {
+          cache: { uncachedPluginKeys },
+          moduleList: {
+            listFilePath,
+            resolutionFailed: moduleDrift.resolutionFailed,
+            missingPluginKeys: moduleDrift.missingPluginKeys,
+            stalePluginKeys: moduleDrift.stalePluginKeys,
+          },
+          verify:
+            verification === undefined
+              ? null
+              : {
+                  ran: true,
+                  unavailable: verification.unavailable,
+                  unexpectedlyEnabled: verification.unexpectedlyEnabled,
+                  unexpectedlyDisabled: verification.unexpectedlyDisabled,
+                },
+        },
+      };
+      // Bypasses Logger entirely (same as --version) so no color code, "Warning:"/"Error:" prefix,
+      // or section-break blank line can leak into stdout.
+      process.stdout.write(`${JSON.stringify(payload)}\n`);
+    }
+
     if (problems.length > 0) {
       // Distinct from the default exitCode 1 (couldn't run at all, e.g. ScopeRequiredError) so a
-      // CI/pre-session caller can tell "drift found" apart from "status itself failed".
+      // CI/pre-session caller can tell "drift found" apart from "status itself failed". In --json
+      // mode this still lands on stderr (Logger sends WARN/ERROR there), so a script reading only
+      // stdout sees the JSON printed above either way.
       this.logger.section();
       const message = problems.map((problem, i) => (i === 0 ? problem : `  ${problem}`)).join("\n\n");
       throw new CliError(message, 2);
     }
-    this.logger.section();
-    const verified =
-      verification !== undefined && !verification.unavailable
-        ? " Claude Code's own resolution agrees."
-        : "";
-    this.logger.info(
-      "All effectively-enabled plugins are cached by Claude Code, and settings.json matches the listed module(s) " +
-        `(if any).${verified}`
-    );
+
+    if (!this.json) {
+      this.logger.section();
+      const verified =
+        verification !== undefined && !verification.unavailable
+          ? " Claude Code's own resolution agrees."
+          : "";
+      this.logger.info(
+        "All effectively-enabled plugins are cached by Claude Code, and settings.json matches the listed module(s) " +
+          `(if any).${verified}`
+      );
+    }
   }
 }

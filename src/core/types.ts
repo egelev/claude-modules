@@ -1,3 +1,5 @@
+import { InvalidModuleShapeError } from "../util/errors.js";
+
 export enum Scope {
   User = "user",
   Project = "project",
@@ -36,6 +38,7 @@ export function applicableScopes(inRepo: boolean): Scope[] {
 export type MarketplaceSource = unknown;
 
 export interface Module {
+  version: string;
   enabledPlugins: Record<string, boolean>;
   extraKnownMarketplaces: Record<string, MarketplaceSource>;
   composedModules: string[];
@@ -75,5 +78,31 @@ export interface InstalledPluginsFile {
 }
 
 export function emptyModule(): Module {
-  return { enabledPlugins: {}, extraKnownMarketplaces: {}, composedModules: [] };
+  return { version: "1.0.0", enabledPlugins: {}, extraKnownMarketplaces: {}, composedModules: [] };
+}
+
+/**
+ * Fills in defaults for a Module parsed from disk — the single place that knows what's missing
+ * means. `moduleName`, when known to the caller, is included in a shape-error message only — it
+ * plays no role in normalization itself.
+ */
+export function normalizeModule(parsed: Partial<Module>, moduleName?: string): Module {
+  if (parsed.composedModules !== undefined) {
+    // A hand-edited settings.json is the only way composedModules can be a shape other than
+    // string[] — 'compose add'/'compose remove' and 'create --compose' only ever write an array of
+    // strings. Left unchecked, a string here (JSON allows `"composedModules": "base"`) is silently
+    // accepted and produces bizarre downstream behavior instead of a clean error: `.includes` on a
+    // string matches substrings, and spreading it spreads individual characters as "module names".
+    const isStringArray =
+      Array.isArray(parsed.composedModules) && parsed.composedModules.every((entry) => typeof entry === "string");
+    if (!isStringArray) {
+      throw new InvalidModuleShapeError("composedModules", "an array of strings", moduleName);
+    }
+  }
+  return {
+    version: parsed.version ?? "1.0.0",
+    enabledPlugins: parsed.enabledPlugins ?? {},
+    extraKnownMarketplaces: parsed.extraKnownMarketplaces ?? {},
+    composedModules: parsed.composedModules ?? [],
+  };
 }

@@ -13,8 +13,10 @@ export class InfoCommand implements Command {
   async execute(): Promise<void> {
     const module = await this.moduleStore.load(this.name);
 
+    const label = `${pc.bold(this.name)} (v${module.version})`;
+
     if (module.composedModules.length > 0) {
-      this.logger.info(`${pc.bold(this.name)}: composes ${module.composedModules.length} module(s):`);
+      this.logger.info(`${label}: composes ${module.composedModules.length} module(s):`);
       for (const composed of module.composedModules) {
         this.logger.info(`  ${pc.bold(composed)}`);
       }
@@ -23,9 +25,9 @@ export class InfoCommand implements Command {
 
     const pluginEntries = Object.entries(module.enabledPlugins);
     if (pluginEntries.length === 0) {
-      this.logger.info(`${pc.bold(this.name)}: no plugins enabled.`);
+      this.logger.info(`${label}: no plugins enabled.`);
     } else {
-      this.logger.info(`${pc.bold(this.name)}: ${pluginEntries.length} plugin(s):`);
+      this.logger.info(`${label}: ${pluginEntries.length} plugin(s):`);
       for (const [key, enabled] of pluginEntries) {
         this.logger.info(`  ${pc.bold(key)} (${enabled ? "enabled" : "disabled"})`);
       }

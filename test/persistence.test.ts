@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Harness } from "./helpers/harness.js";
 
 /**
- * One persisted list per scope, each living with the thing it describes. Before the split, all
- * three shared a single `.claude-modules` found by walking up from the cwd, which meant persisting
- * at one repo scope silently clobbered the other's list, and a user-scope persist dropped a file
+ * One saved list per scope, each living with the thing it describes. Before the split, all
+ * three shared a single `.claude-modules` found by walking up from the cwd, which meant saving
+ * at one repo scope silently clobbered the other's list, and a user-scope save dropped a file
  * into whatever directory it ran from.
  */
 describe("per-scope module lists", () => {
@@ -26,23 +26,23 @@ describe("per-scope module lists", () => {
     ["user", "user.modules"],
     ["project", ".claude-modules"],
     ["local", ".claude-modules.local"],
-  ])("--scope %s persists to %s", async (scope) => {
-    await h.run(["enable", "alpha", "--scope", scope, "--persist"]);
+  ])("--scope %s saves to %s", async (scope) => {
+    await h.run(["enable", "alpha", "--scope", scope, "--save"]);
 
     expect(await h.readModuleList(scope as "user" | "project" | "local")).toBe("alpha\n");
   });
 
   it("keeps project and local lists separate — neither overwrites the other", async () => {
-    await h.run(["enable", "alpha", "--scope", "project", "--persist"]);
-    await h.run(["enable", "beta", "--scope", "local", "--persist"]);
+    await h.run(["enable", "alpha", "--scope", "project", "--save"]);
+    await h.run(["enable", "beta", "--scope", "local", "--save"]);
 
     expect(await h.readModuleList("project")).toBe("alpha\n");
     expect(await h.readModuleList("local")).toBe("beta\n");
   });
 
   it("reloads each scope from its own list", async () => {
-    await h.run(["enable", "alpha", "--scope", "project", "--persist"]);
-    await h.run(["enable", "beta", "--scope", "local", "--persist"]);
+    await h.run(["enable", "alpha", "--scope", "project", "--save"]);
+    await h.run(["enable", "beta", "--scope", "local", "--save"]);
 
     const project = await h.run(["reload", "--scope", "project"]);
     const local = await h.run(["reload", "--scope", "local"]);
@@ -53,10 +53,10 @@ describe("per-scope module lists", () => {
     expect((await h.readSettings("local")).enabledPlugins).toEqual({ "b@mp": true });
   });
 
-  it("persisting at one scope leaves the other scopes' lists untouched", async () => {
-    await h.run(["enable", "alpha", "--scope", "project", "--persist"]);
-    await h.run(["enable", "beta", "--scope", "local", "--persist"]);
-    await h.run(["enable", "gamma", "--scope", "user", "--persist"]);
+  it("saving at one scope leaves the other scopes' lists untouched", async () => {
+    await h.run(["enable", "alpha", "--scope", "project", "--save"]);
+    await h.run(["enable", "beta", "--scope", "local", "--save"]);
+    await h.run(["enable", "gamma", "--scope", "user", "--save"]);
 
     expect(await h.readModuleList("project")).toBe("alpha\n");
     expect(await h.readModuleList("local")).toBe("beta\n");
@@ -64,8 +64,8 @@ describe("per-scope module lists", () => {
   });
 
   it("status compares each scope against its own list", async () => {
-    await h.run(["enable", "alpha", "--scope", "project", "--persist"]);
-    await h.run(["enable", "beta", "--scope", "local", "--persist"]);
+    await h.run(["enable", "alpha", "--scope", "project", "--save"]);
+    await h.run(["enable", "beta", "--scope", "local", "--save"]);
 
     const local = await h.run(["status", "--scope", "local"]);
 
@@ -75,15 +75,15 @@ describe("per-scope module lists", () => {
     expect(local.stdout).toContain("beta");
   });
 
-  it("an explicit --persist=<path> still wins and resolves against cwd", async () => {
-    await h.run(["enable", "alpha", "--persist=custom.list"]);
+  it("an explicit --save=<path> still wins and resolves against cwd", async () => {
+    await h.run(["enable", "alpha", "--save=custom.list"]);
 
     expect(await h.readFileAt("custom.list")).toBe("alpha\n");
     expect(await h.moduleListExists("local")).toBe(false);
   });
 
   it("a custom path round-trips through reload --file", async () => {
-    await h.run(["enable", "alpha", "--persist=custom.list"]);
+    await h.run(["enable", "alpha", "--save=custom.list"]);
 
     const result = await h.run(["reload", "--file", "custom.list"]);
 
@@ -93,7 +93,7 @@ describe("per-scope module lists", () => {
 
   it("bare reload does not find a custom path — --file is the only way back", async () => {
     // Documented in `enable --help`: bare reload consults the per-scope locations only.
-    await h.run(["enable", "alpha", "--persist=custom.list"]);
+    await h.run(["enable", "alpha", "--save=custom.list"]);
 
     const result = await h.run(["reload"]);
 
@@ -101,14 +101,14 @@ describe("per-scope module lists", () => {
     expect(result.stderr).toContain("No module list found for local scope");
   });
 
-  it("writes no list at all without --persist", async () => {
+  it("writes no list at all without --save", async () => {
     await h.run(["enable", "alpha"]);
 
     expect(await h.moduleListExists("local")).toBe(false);
   });
 
   it("writes nothing under --dry-run but names the target", async () => {
-    const result = await h.run(["enable", "alpha", "--scope", "user", "--persist", "--dry-run"]);
+    const result = await h.run(["enable", "alpha", "--scope", "user", "--save", "--dry-run"]);
 
     expect(result.stdout).toContain("user.modules");
     expect(await h.moduleListExists("user")).toBe(false);

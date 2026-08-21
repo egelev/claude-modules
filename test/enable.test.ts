@@ -37,6 +37,20 @@ describe("enable", () => {
     });
   });
 
+  it("merges by default: a later 'enable' for a different module adds to what's already active", async () => {
+    await h.run(["enable", "backend"]);
+
+    const result = await h.run(["enable", "frontend"]);
+
+    expect(result.code).toBe(0);
+    const settings = await h.readSettings("local");
+    expect(settings.enabledPlugins).toEqual({
+      "jdtls@mp": true,
+      "quarkus@mp": true,
+      "playwright@mp": true,
+    });
+  });
+
   it("copies the union's marketplaces into the target scope", async () => {
     await h.run(["enable", "backend"]);
 
@@ -94,6 +108,16 @@ describe("enable", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("Invalid --scope 'galaxy'");
+  });
+
+  it("defaults to local scope when --scope is omitted", async () => {
+    const result = await h.run(["enable", "backend"]);
+
+    expect(result.code).toBe(0);
+    const settings = await h.readSettings("local");
+    expect(settings.enabledPlugins).toHaveProperty("jdtls@mp", true);
+    await expect(h.readSettings("project")).rejects.toThrow();
+    await expect(h.readSettings("user")).rejects.toThrow();
   });
 
   it("errors on a module that doesn't exist", async () => {
@@ -167,15 +191,38 @@ describe("enable --only", () => {
     expect(local.enabledPlugins).toEqual({ "jdtls@mp": true });
   });
 
-  it("warns that --only is meaningless in user scope", async () => {
+  it("--only still applies exactly in user scope, even though there's no broader scope to override", async () => {
     const result = await h.run(["enable", "backend", "--scope", "user", "--only"]);
 
     expect(result.code).toBe(0);
-    expect(result.stderr).toContain("--only has no effect in 'user' scope");
+    expect(result.output).toContain("'user' scope has no broader scope to override");
+  });
+
+  it("--only replaces within this scope too: a plugin from a module no longer named is turned off", async () => {
+    await h.writeModule("other", { enabledPlugins: { "other@mp": true }, extraKnownMarketplaces: {} });
+    await h.run(["enable", "other"]);
+
+    const result = await h.run(["enable", "backend", "--only"]);
+
+    expect(result.code).toBe(0);
+    const local = await h.readSettings("local");
+    expect(local.enabledPlugins).toEqual({ "other@mp": false, "jdtls@mp": true });
+  });
+
+  it("does not crash outside a git repository at the default (local) scope, and still writes local scope", async () => {
+    const result = await h.run(["enable", "backend", "--only"], h.nonRepoDir);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("No git repository found here");
+    expect(result.stderr).toContain("--scope user");
+    const written = JSON.parse(await h.readFileAt(".claude/settings.local.json", h.nonRepoDir)) as {
+      enabledPlugins?: Record<string, boolean>;
+    };
+    expect(written.enabledPlugins).toEqual({ "jdtls@mp": true });
   });
 });
 
-describe("enable --persist", () => {
+describe("enable --save", () => {
   let h: Harness;
 
   beforeEach(async () => {
@@ -192,16 +239,53 @@ describe("enable --persist", () => {
     const subdir = await h.writeFileAt("nested/deep/.keep", "");
     const nested = subdir.replace("/.keep", "");
 
-    await h.run(["enable", "backend", "--persist"], nested);
+    await h.run(["enable", "backend", "--save"], nested);
 
     // Anchored at the repo root so `reload` finds it from any subdirectory.
     expect(await h.readModuleList("local")).toBe("backend\n");
   });
 
-  it("writes to an explicit --persist=<path>, resolved against cwd", async () => {
-    await h.run(["enable", "backend", "--persist=custom.list"]);
+  it("writes to an explicit --save=<path>, resolved against cwd", async () => {
+    await h.run(["enable", "backend", "--save=custom.list"]);
 
     expect(await h.readFileAt("custom.list")).toBe("backend\n");
+  });
+
+  it("--save=<path> still merges against the scope's canonical list, not just this run's own names", async () => {
+    await h.writeModule("frontend", { enabledPlugins: { "playwright@mp": true }, extraKnownMarketplaces: {} });
+    await h.run(["enable", "backend", "--save"]); // canonical .claude-modules.local: "backend"
+
+    await h.run(["enable", "frontend", "--save=custom.list"]);
+
+    // The custom path gets the merge (canonical "backend" + this run's "frontend"), not just
+    // "frontend" alone — and the canonical file itself is untouched, since this run saved elsewhere.
+    expect(await h.readFileAt("custom.list")).toBe("backend\nfrontend\n");
+    expect(await h.readModuleList("local")).toBe("backend\n");
+  });
+
+  it("merge-appends: a second 'enable --save' adds to the list rather than overwriting it", async () => {
+    await h.writeModule("frontend", { enabledPlugins: { "playwright@mp": true }, extraKnownMarketplaces: {} });
+    await h.run(["enable", "backend", "--save"]);
+
+    await h.run(["enable", "frontend", "--save"]);
+
+    expect(await h.readModuleList("local")).toBe("backend\nfrontend\n");
+  });
+
+  it("--only --save replaces the list rather than merging into it", async () => {
+    await h.writeModule("frontend", { enabledPlugins: { "playwright@mp": true }, extraKnownMarketplaces: {} });
+    await h.run(["enable", "backend", "--save"]);
+
+    await h.run(["enable", "frontend", "--only", "--save"]);
+
+    expect(await h.readModuleList("local")).toBe("frontend\n");
+  });
+
+  it("reports the resulting active module list even without --save", async () => {
+    const result = await h.run(["enable", "backend"]);
+
+    expect(result.stdout).toContain("Modules active in local scope: [backend]");
+    expect(result.stdout).toContain("not saved");
   });
 });
 

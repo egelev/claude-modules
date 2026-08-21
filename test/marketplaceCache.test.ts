@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { KnownMarketplacesCache } from "../src/core/KnownMarketplacesCache.js";
 import { MarketplaceCacheInstaller } from "../src/core/MarketplaceCacheInstaller.js";
 import { marketplaceSpecFromSource } from "../src/core/marketplaceSpec.js";
-import { ClaudeRunResult } from "../src/core/PluginCacheInstaller.js";
+import { ClaudeRunResult } from "../src/core/ClaudeRunner.js";
 import { Paths } from "../src/util/Paths.js";
 import { Logger, LogLevel } from "../src/util/Logger.js";
 
@@ -29,6 +29,12 @@ async function writeKnownMarketplaces(entries: unknown): Promise<void> {
 describe("marketplaceSpecFromSource", () => {
   it("recovers a github spec", () => {
     expect(marketplaceSpecFromSource({ source: { source: "github", repo: "owner/repo" } })).toBe("owner/repo");
+  });
+
+  it("recovers a github spec with an @ref pin, verbatim", () => {
+    expect(marketplaceSpecFromSource({ source: { source: "github", repo: "owner/repo@v2.0" } })).toBe(
+      "owner/repo@v2.0"
+    );
   });
 
   it("recovers a git spec", () => {

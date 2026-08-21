@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EnabledPluginsVerifier } from "../src/core/EnabledPluginsVerifier.js";
-import { ClaudeRunResult } from "../src/core/PluginCacheInstaller.js";
+import { ClaudeRunResult } from "../src/core/ClaudeRunner.js";
 import { Logger, LogLevel } from "../src/util/Logger.js";
 import { Harness } from "./helpers/harness.js";
 

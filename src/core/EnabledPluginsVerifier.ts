@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { ClaudeRunner, defaultClaudeRunner } from "./PluginCacheInstaller.js";
+import { ClaudeRunner, defaultClaudeRunner } from "./ClaudeRunner.js";
 import { Logger } from "../util/Logger.js";
 
 export interface VerifyReport {
@@ -44,22 +44,26 @@ export class EnabledPluginsVerifier {
     private readonly runClaude: ClaudeRunner = defaultClaudeRunner
   ) {}
 
-  async verify(effectivelyEnabled: ReadonlySet<string>): Promise<VerifyReport> {
+  async verify(effectivelyEnabled: ReadonlySet<string>, quiet = false): Promise<VerifyReport> {
     const result = await this.runClaude(["plugin", "list", "--json"], this.env);
     if (!result.ok) {
-      this.logger.warn(
-        `Could not verify against Claude Code's own plugin resolution (${result.detail}).\n  ` +
-          `Reporting this tool's computed state only — re-run without --verify to skip this check.`
-      );
+      if (!quiet) {
+        this.logger.warn(
+          `Could not verify against Claude Code's own plugin resolution (${result.detail}).\n  ` +
+            `Reporting this tool's computed state only — re-run without --verify to skip this check.`
+        );
+      }
       return NOT_RUN;
     }
 
     const claudeEnabled = this.parseEnabled(result.stdout);
     if (claudeEnabled === undefined) {
-      this.logger.warn(
-        "Could not parse 'claude plugin list --json' output — skipping the cross-check. This usually means the " +
-          "installed Claude Code version reports a different shape than expected."
-      );
+      if (!quiet) {
+        this.logger.warn(
+          "Could not parse 'claude plugin list --json' output — skipping the cross-check. This usually means the " +
+            "installed Claude Code version reports a different shape than expected."
+        );
+      }
       return NOT_RUN;
     }
 
@@ -71,32 +75,34 @@ export class EnabledPluginsVerifier {
       .filter((key) => claudeEnabled.known.has(key) && !claudeEnabled.enabled.has(key))
       .sort();
 
-    this.logger.section();
-    if (unexpectedlyEnabled.length === 0 && unexpectedlyDisabled.length === 0) {
-      this.logger.info(
-        "Verified against Claude Code's own resolution of what a session in this directory would load — no disagreement."
-      );
-    } else {
-      const summaryLines: string[] = [];
-      if (unexpectedlyEnabled.length > 0) {
+    if (!quiet) {
+      this.logger.section();
+      if (unexpectedlyEnabled.length === 0 && unexpectedlyDisabled.length === 0) {
+        this.logger.info(
+          "Verified against Claude Code's own resolution of what a session in this directory would load — no disagreement."
+        );
+      } else {
+        const summaryLines: string[] = [];
+        if (unexpectedlyEnabled.length > 0) {
+          summaryLines.push(
+            `  Claude Code reports these as enabled, but this tool's scope resolution does not: ` +
+              unexpectedlyEnabled.map((key) => pc.bold(key)).join(", ")
+          );
+        }
+        if (unexpectedlyDisabled.length > 0) {
+          summaryLines.push(
+            `  This tool considers these enabled, but Claude Code reports them disabled: ` +
+              unexpectedlyDisabled.map((key) => pc.bold(key)).join(", ")
+          );
+        }
         summaryLines.push(
-          `  Claude Code reports these as enabled, but this tool's scope resolution does not: ` +
-            unexpectedlyEnabled.map((key) => pc.bold(key)).join(", ")
+          "  A managed-settings policy is the usual cause: it outranks user/project/local and this tool cannot read it."
+        );
+        this.logger.info(
+          `Verified against Claude Code's own resolution of what a session in this directory would load ` +
+            `(${pc.bold("claude plugin list --json")}):\n${summaryLines.join("\n")}`
         );
       }
-      if (unexpectedlyDisabled.length > 0) {
-        summaryLines.push(
-          `  This tool considers these enabled, but Claude Code reports them disabled: ` +
-            unexpectedlyDisabled.map((key) => pc.bold(key)).join(", ")
-        );
-      }
-      summaryLines.push(
-        "  A managed-settings policy is the usual cause: it outranks user/project/local and this tool cannot read it."
-      );
-      this.logger.info(
-        `Verified against Claude Code's own resolution of what a session in this directory would load ` +
-          `(${pc.bold("claude plugin list --json")}):\n${summaryLines.join("\n")}`
-      );
     }
 
     return { unavailable: false, unexpectedlyEnabled, unexpectedlyDisabled };

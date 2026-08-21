@@ -2,7 +2,9 @@ import pc from "picocolors";
 import { Command } from "./Command.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
+import { bumpMinor } from "../../core/semver.js";
 import { Logger } from "../../util/Logger.js";
+import { describeMarketplaceTarget } from "./marketplaceTarget.js";
 
 export class RemoveMarketplaceCommand implements Command {
   constructor(
@@ -15,7 +17,7 @@ export class RemoveMarketplaceCommand implements Command {
   ) {}
 
   async execute(): Promise<void> {
-    const target = this.moduleName === undefined ? "the global registry" : `module '${pc.bold(this.moduleName)}'`;
+    const target = describeMarketplaceTarget(this.moduleName);
 
     if (this.moduleName === undefined) {
       if ((await this.marketplaceRegistry.get(this.name)) === undefined) {
@@ -43,7 +45,7 @@ export class RemoveMarketplaceCommand implements Command {
     }
 
     delete module.extraKnownMarketplaces[this.name];
-    await this.moduleStore.save(this.moduleName, module);
+    await this.moduleStore.saveWithBump(this.moduleName, module, bumpMinor);
     this.logger.info(`Removed marketplace '${pc.bold(this.name)}' from ${target}.`);
   }
 }

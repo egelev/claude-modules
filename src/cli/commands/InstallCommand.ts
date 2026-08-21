@@ -5,8 +5,9 @@ import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { KnownMarketplacesCache } from "../../core/KnownMarketplacesCache.js";
 import { PluginCacheInstaller } from "../../core/PluginCacheInstaller.js";
 import { parsePluginKey } from "../../core/pluginKey.js";
+import { bumpPatch } from "../../core/semver.js";
 import { warnIfNonPortableMarketplace } from "../../core/marketplacePortability.js";
-import { UnknownMarketplaceError } from "../../util/errors.js";
+import { InvalidJsonError, UnknownMarketplaceError } from "../../util/errors.js";
 import { Logger } from "../../util/Logger.js";
 
 export class InstallCommand implements Command {
@@ -26,8 +27,17 @@ export class InstallCommand implements Command {
     const { full, marketplace } = parsePluginKey(this.pluginKey);
     const module = await this.moduleStore.load(this.moduleName);
 
+    if (module.enabledPlugins[full] === true) {
+      this.logger.warn(`'${pc.bold(full)}' is already enabled in module '${pc.bold(this.moduleName)}'; nothing to do.`);
+      return;
+    }
+
     if (this.sourceJson !== undefined) {
-      module.extraKnownMarketplaces[marketplace] = JSON.parse(this.sourceJson);
+      try {
+        module.extraKnownMarketplaces[marketplace] = JSON.parse(this.sourceJson);
+      } catch (err) {
+        throw new InvalidJsonError("--source", err);
+      }
       this.logger.debug(
         `Recorded explicit --source for marketplace '${pc.bold(marketplace)}' on module '${pc.bold(this.moduleName)}'.`
       );
@@ -51,6 +61,7 @@ export class InstallCommand implements Command {
     }
 
     module.enabledPlugins[full] = true;
+    module.version = bumpPatch(module.version);
 
     this.logger.section();
     if (this.dryRun) {
@@ -61,6 +72,16 @@ export class InstallCommand implements Command {
     }
 
     this.logger.section();
-    await this.pluginCacheInstaller.ensureCached([full], this.dryRun);
+    // No scope is threaded through here — a module isn't tied to one at definition time, so caching
+    // always targets 'user' (PluginCacheInstaller's default). That durably enables the plugin at the
+    // user's real global scope as a side effect of caching it, which this command has no scope of its
+    // own to justify — so immediately neutralize it, leaving the plugin materialized in the shared
+    // cache without silently going live everywhere. `enable --install`/`reload --install` pass their
+    // real target scope instead (see ApplyModulesUseCase), so the side effect lands where their own
+    // write is about to land anyway and this neutralize step is unique to this standalone command.
+    const freshlyInstalled = await this.pluginCacheInstaller.ensureCached([full], this.dryRun);
+    if (freshlyInstalled.length > 0) {
+      await this.pluginCacheInstaller.neutralizeUserScopeEnablement(freshlyInstalled);
+    }
   }
 }

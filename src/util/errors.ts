@@ -1,3 +1,7 @@
+export function describeError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export class CliError extends Error {
   readonly exitCode: number;
 
@@ -35,6 +39,13 @@ export class InvalidModuleNameError extends CliError {
   }
 }
 
+export class InvalidModuleShapeError extends CliError {
+  constructor(field: string, expected: string, moduleName?: string) {
+    const subject = moduleName !== undefined ? `Malformed module '${moduleName}'` : "Malformed module";
+    super(`${subject}: '${field}' must be ${expected}. Fix the hand-edit and try again.`);
+  }
+}
+
 export class InvalidPluginKeyError extends CliError {
   constructor(pluginKey: string) {
     super(`Invalid plugin '${pluginKey}': expected the form '<plugin-name>@<marketplace-name>'.`);
@@ -67,8 +78,9 @@ export class CompositionCycleError extends CliError {
 export class MarketplaceConflictError extends CliError {
   constructor(marketplace: string, moduleA: string, moduleB: string) {
     super(
-      `Marketplace '${marketplace}' is declared with different sources in modules '${moduleA}' and '${moduleB}'. ` +
-        `Resolve the conflict in one of the modules before applying them together.`
+      `Marketplace '${marketplace}' is declared with different sources, surfaced via modules '${moduleA}' and ` +
+        `'${moduleB}' (in a deep composition, one or both may just be relaying a composed child's declaration, not ` +
+        `the module that actually declared it). Resolve the conflict in one of the modules before applying them together.`
     );
   }
 }
@@ -76,18 +88,32 @@ export class MarketplaceConflictError extends CliError {
 export interface ModuleImportCollision {
   name: string;
   kind: "root" | "composed";
+  /** False for a bare `modules/<name>/` directory with no loadable settings.json — typically a
+   * leftover from an import that crashed partway through, not a real pre-existing module. */
+  hasSettings: boolean;
 }
 
 export class ModuleImportCollisionError extends CliError {
   constructor(collisions: readonly ModuleImportCollision[]) {
-    const lines = collisions.map(({ name, kind }) =>
-      kind === "root"
+    const lines = collisions.map(({ name, kind, hasSettings }) => {
+      if (!hasSettings) {
+        return `  '${name}' (${kind}) — a module directory already exists here with no readable settings.json, ` +
+          `likely left behind by an import that didn't finish. Remove '${name}' from ` +
+          `$CLAUDE_MODULES_HOME/modules/ if so, or rename/move it aside if it's something else.`;
+      }
+      return kind === "root"
         ? `  '${name}' (root) — rename the existing module, or re-run with --name <new-name>.`
-        : `  '${name}' (composed) — rename the existing module, or re-run with --composed-prefix <prefix>.`
-    );
+        : `  '${name}' (composed) — rename the existing module, or re-run with --composed-prefix <prefix>.`;
+    });
     super(
       `Import would overwrite ${collisions.length} existing module(s):\n${lines.join("\n")}`
     );
+  }
+}
+
+export class InvalidJsonError extends CliError {
+  constructor(context: string, cause: unknown) {
+    super(`${context} is not valid JSON: ${describeError(cause)}`);
   }
 }
 

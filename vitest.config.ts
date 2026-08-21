@@ -10,5 +10,10 @@ export default defineConfig({
     // vitest (true today because stdout isn't a TTY); pin it explicitly so a future CI workflow
     // (picocolors treats env.CI as color-on) can't flip these tests color-on silently.
     env: { NO_COLOR: "1" },
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "html"],
+      include: ["src/**/*.ts"],
+    },
   },
 });

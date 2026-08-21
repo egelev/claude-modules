@@ -1,11 +1,14 @@
-import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { cp, mkdir, mkdtemp, readFile, rename, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as tar from "tar";
 import { Paths } from "../util/Paths.js";
 import { atomicWriteFile, toJsonWithTrailingNewline } from "../util/atomicWrite.js";
+import { isDirectory } from "../util/fsProbe.js";
 import {
   CompositionCycleError,
+  describeError,
   DuplicateImportNameError,
   InvalidExportArchiveError,
   ModuleImportCollisionError,
@@ -13,17 +16,9 @@ import {
 import { warnIfNonPortableMarketplace } from "./marketplacePortability.js";
 import { CompositionResolver } from "./CompositionResolver.js";
 import { ModuleStore } from "./ModuleStore.js";
-import { Module } from "./types.js";
+import { Module, normalizeModule } from "./types.js";
 import { Logger } from "../util/Logger.js";
-
-const MANIFEST_VERSION = 1;
-
-interface ExportManifest {
-  version: number;
-  rootModule: string;
-  composedModules: string[];
-  exportedAt: string;
-}
+import { ExportManifest, MANIFEST_VERSION, parseManifest } from "./exportManifest.js";
 
 export interface ExportResult {
   outputPath: string;
@@ -88,7 +83,18 @@ export class ModuleArchiver {
       }
 
       await mkdir(join(outputPath, ".."), { recursive: true });
-      await tar.create({ gzip: true, file: outputPath, cwd: staging }, ["manifest.json", "modules"]);
+      // Temp-file-then-rename, same pattern atomicWriteFile uses elsewhere in this codebase, applied
+      // one level up at the archive itself: tar.create writes directly for a while before it's done,
+      // so a crash mid-write must never leave a truncated file at outputPath, and must never clobber
+      // a pre-existing good archive there either.
+      const tmpOutputPath = `${outputPath}.${randomBytes(6).toString("hex")}.tmp`;
+      try {
+        await tar.create({ gzip: true, file: tmpOutputPath, cwd: staging }, ["manifest.json", "modules"]);
+        await rename(tmpOutputPath, outputPath);
+      } catch (err) {
+        await unlink(tmpOutputPath).catch(() => {});
+        throw err;
+      }
 
       return { outputPath, rootModule, composedModules: manifest.composedModules };
     } finally {
@@ -100,34 +106,48 @@ export class ModuleArchiver {
     archivePath: string,
     options: { name: string | undefined; composedPrefix: string | undefined; dryRun: boolean | undefined }
   ): Promise<ImportResult> {
+    // A dry run must not write anything — not even to a temp directory — so it validates against a
+    // list-mode pass over the archive (entry names + manifest.json's content, read in memory) rather
+    // than a real extraction. It can validate everything a real import checks *before* writing: the
+    // manifest, that every promised module directory is actually present, and name collisions. The
+    // one thing it correctly can't do is the post-write composition re-check below, since nothing
+    // was written for it to re-check.
+    if (options.dryRun) {
+      const { entryPaths, manifestRaw } = await this.listArchiveEntries(archivePath);
+      const manifest = parseManifest(manifestRaw);
+      this.verifyArchiveContentsFromEntries(entryPaths, manifest);
+      const nameMap = this.buildNameMap(manifest, options);
+      this.checkNameMapIsInjective(nameMap);
+      await this.checkCollisions(nameMap, manifest.rootModule);
+      return {
+        rootModule: nameMap.get(manifest.rootModule)!,
+        composedModules: manifest.composedModules.map((name) => nameMap.get(name)!),
+      };
+    }
+
     const extractDir = await mkdtemp(join(tmpdir(), "claude-modules-import-"));
     try {
       await tar.extract({ file: archivePath, cwd: extractDir });
 
-      const manifest = await this.readManifest(extractDir);
-      const rootName = options.name ?? manifest.rootModule;
-      const nameMap = new Map<string, string>([[manifest.rootModule, rootName]]);
-      for (const composedName of manifest.composedModules) {
-        nameMap.set(composedName, options.composedPrefix ? `${options.composedPrefix}${composedName}` : composedName);
-      }
-
+      const manifestRaw = await readFile(join(extractDir, "manifest.json"), "utf8").catch(() => undefined);
+      const manifest = parseManifest(manifestRaw);
       await this.verifyArchiveContents(extractDir, manifest);
+      const nameMap = this.buildNameMap(manifest, options);
       this.checkNameMapIsInjective(nameMap);
       await this.checkCollisions(nameMap, manifest.rootModule);
-      if (!options.dryRun) {
-        await this.copyRenamed(extractDir, nameMap);
-        // A composed module can arrive with a pre-existing marketplace conflict — composedModules
-        // is only ever validated at 'create --compose' time, so hand-editing it (the README's only
-        // way to change it afterward) can produce an archive that already has one. The collision
-        // pre-check above only catches name clashes, not this, so it's still possible here. The
-        // modules are already written at this point, so this is reported, not rolled back.
-        await this.compositionResolver.resolveEffective(rootName).catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
-          this.logger.warn(
-            `Imported module '${rootName}', but its composition doesn't currently resolve: ${message}`
-          );
-        });
-      }
+
+      await this.copyRenamed(extractDir, nameMap, manifest.rootModule);
+      const rootName = nameMap.get(manifest.rootModule)!;
+      // A composed module can arrive with a pre-existing marketplace conflict — composedModules
+      // is only ever validated at 'create --compose' time, so hand-editing it (the README's only
+      // way to change it afterward) can produce an archive that already has one. The collision
+      // pre-check above only catches name clashes, not this, so it's still possible here. The
+      // modules are already written at this point, so this is reported, not rolled back.
+      await this.compositionResolver.resolveEffective(rootName).catch((err: unknown) => {
+        this.logger.warn(
+          `Imported module '${rootName}', but its composition doesn't currently resolve: ${describeError(err)}`
+        );
+      });
 
       return {
         rootModule: rootName,
@@ -147,38 +167,57 @@ export class ModuleArchiver {
     }
   }
 
-  private async readManifest(extractDir: string): Promise<ExportManifest> {
-    const raw = await readFile(join(extractDir, "manifest.json"), "utf8").catch(() => {
-      throw new InvalidExportArchiveError("missing manifest.json — this doesn't look like a 'claude-modules export' archive.");
+  /**
+   * Lists an archive's entries without extracting anything to disk: entry paths (enough to confirm
+   * every promised module directory exists) and manifest.json's content specifically, captured from
+   * its entry stream in memory. Every other entry is left to `tar.t`'s default auto-resume behavior.
+   */
+  private async listArchiveEntries(
+    archivePath: string
+  ): Promise<{ entryPaths: Set<string>; manifestRaw: string | undefined }> {
+    const entryPaths = new Set<string>();
+    const manifestChunks: Buffer[] = [];
+    await tar.t({
+      file: archivePath,
+      onReadEntry: (entry) => {
+        entryPaths.add(entry.path);
+        if (entry.path === "manifest.json") {
+          entry.on("data", (chunk: Buffer) => manifestChunks.push(chunk));
+        }
+      },
     });
-    let parsed: Partial<ExportManifest>;
-    try {
-      parsed = JSON.parse(raw) as Partial<ExportManifest>;
-    } catch {
-      throw new InvalidExportArchiveError("manifest.json is not valid JSON.");
-    }
-    if (typeof parsed.rootModule !== "string" || !Array.isArray(parsed.composedModules)) {
-      throw new InvalidExportArchiveError("manifest.json is missing 'rootModule' or 'composedModules'.");
-    }
-    const version = parsed.version ?? MANIFEST_VERSION;
-    if (version !== MANIFEST_VERSION) {
-      throw new InvalidExportArchiveError(
-        `manifest.json is version ${version}, but this build of claude-modules only understands version ${MANIFEST_VERSION}. Upgrade claude-modules and try again.`
-      );
-    }
     return {
-      version,
-      rootModule: parsed.rootModule,
-      composedModules: parsed.composedModules,
-      exportedAt: parsed.exportedAt ?? "",
+      entryPaths,
+      manifestRaw: manifestChunks.length > 0 ? Buffer.concat(manifestChunks).toString("utf8") : undefined,
     };
+  }
+
+  private buildNameMap(
+    manifest: ExportManifest,
+    options: { name: string | undefined; composedPrefix: string | undefined }
+  ): Map<string, string> {
+    const rootName = options.name ?? manifest.rootModule;
+    const nameMap = new Map<string, string>([[manifest.rootModule, rootName]]);
+    for (const composedName of manifest.composedModules) {
+      nameMap.set(composedName, options.composedPrefix ? `${options.composedPrefix}${composedName}` : composedName);
+    }
+    return nameMap;
   }
 
   private async verifyArchiveContents(extractDir: string, manifest: ExportManifest): Promise<void> {
     for (const name of [manifest.rootModule, ...manifest.composedModules]) {
-      const exists = await stat(join(extractDir, "modules", name))
-        .then((s) => s.isDirectory())
-        .catch(() => false);
+      const exists = await isDirectory(join(extractDir, "modules", name));
+      if (!exists) {
+        throw new InvalidExportArchiveError(`manifest.json promises module '${name}', but the archive has no such directory.`);
+      }
+    }
+  }
+
+  /** Same check as `verifyArchiveContents`, against a list-mode entry-path set instead of the disk. */
+  private verifyArchiveContentsFromEntries(entryPaths: ReadonlySet<string>, manifest: ExportManifest): void {
+    for (const name of [manifest.rootModule, ...manifest.composedModules]) {
+      const prefix = `modules/${name}/`;
+      const exists = [...entryPaths].some((path) => path === `modules/${name}` || path.startsWith(prefix));
       if (!exists) {
         throw new InvalidExportArchiveError(`manifest.json promises module '${name}', but the archive has no such directory.`);
       }
@@ -199,24 +238,51 @@ export class ModuleArchiver {
   }
 
   private async checkCollisions(nameMap: ReadonlyMap<string, string>, rootOriginalName: string): Promise<void> {
-    const collisions: { name: string; kind: "root" | "composed" }[] = [];
+    const collisions: { name: string; kind: "root" | "composed"; hasSettings: boolean }[] = [];
     for (const [originalName, finalName] of nameMap) {
-      if (await this.moduleStore.exists(finalName)) {
-        collisions.push({ name: finalName, kind: originalName === rootOriginalName ? "root" : "composed" });
+      // A loadable settings.json is the common case, but a bare `modules/<name>/` directory with no
+      // (or an unreadable) settings.json can also exist — typically a leftover from an import that
+      // crashed partway through `copyRenamed` below. Treating only `moduleStore.exists` (a *loadable*
+      // settings.json) as a collision would let a retry silently merge into that stale partial state
+      // instead of erroring on it.
+      const hasSettings = await this.moduleStore.exists(finalName);
+      const collides = hasSettings || (await this.directoryExists(finalName));
+      if (collides) {
+        collisions.push({ name: finalName, kind: originalName === rootOriginalName ? "root" : "composed", hasSettings });
       }
     }
     if (collisions.length > 0) throw new ModuleImportCollisionError(collisions);
   }
 
-  private async copyRenamed(extractDir: string, nameMap: ReadonlyMap<string, string>): Promise<void> {
-    for (const [originalName, finalName] of nameMap) {
+  private async directoryExists(name: string): Promise<boolean> {
+    return isDirectory(this.paths.moduleDir(name));
+  }
+
+  /**
+   * Writes composed (leaf) modules before the root, deliberately the opposite of `nameMap`'s
+   * root-first iteration order: the root is what makes an import "look done" (it's the name the user
+   * asked to import, and what a later `enable`/`info` would be run against), so if a crash happens
+   * partway through, leaving it unwritten means the import as a whole still reads as failed rather
+   * than as a visible-but-broken root that then fails oddly later with `ModuleNotFoundError` on a
+   * composed child the user never named.
+   */
+  private async copyRenamed(
+    extractDir: string,
+    nameMap: ReadonlyMap<string, string>,
+    rootOriginalName: string
+  ): Promise<void> {
+    const entries = [...nameMap.entries()];
+    const ordered = [
+      ...entries.filter(([originalName]) => originalName !== rootOriginalName),
+      ...entries.filter(([originalName]) => originalName === rootOriginalName),
+    ];
+    for (const [originalName, finalName] of ordered) {
       const source = join(extractDir, "modules", originalName);
       const settingsPath = join(source, "settings.json");
       const raw = await readFile(settingsPath, "utf8");
       const parsed = JSON.parse(raw) as Partial<Module>;
       const rewritten: Module = {
-        enabledPlugins: parsed.enabledPlugins ?? {},
-        extraKnownMarketplaces: parsed.extraKnownMarketplaces ?? {},
+        ...normalizeModule(parsed, finalName),
         composedModules: (parsed.composedModules ?? []).map((childName) => nameMap.get(childName) ?? childName),
       };
       await atomicWriteFile(settingsPath, toJsonWithTrailingNewline(rewritten));

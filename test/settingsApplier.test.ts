@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SettingsApplier } from "../src/core/SettingsApplier.js";
 import { ResolvedModules } from "../src/core/ModuleResolver.js";
+import { Logger, LogLevel } from "../src/util/Logger.js";
 import { githubSource } from "./helpers/harness.js";
 
-const applier = new SettingsApplier();
+const applier = new SettingsApplier(new Logger(LogLevel.ERROR));
 
 function union(pluginNames: string[], marketplaces: Record<string, unknown> = {}): ResolvedModules {
   return { enabledPluginNames: new Set(pluginNames), extraKnownMarketplaces: marketplaces };
@@ -23,18 +24,26 @@ describe("SettingsApplier.apply", () => {
     expect(result.theme).toBe("light");
   });
 
-  it("has replace semantics: a previously-enabled plugin outside the union is turned off", () => {
+  it("merges by default: a plugin outside the union is left exactly as it was", () => {
+    const existing = { enabledPlugins: { "a@mp": true, "b@mp": false, "c@mp": true } };
+
+    const result = applier.apply(existing, union(["c@mp"]));
+
+    // This is what makes a separate `enable` for another module additive rather than a
+    // replacement — the property `enable --only` opts back out of via `exclusive: true` below.
+    expect(result.enabledPlugins).toEqual({ "a@mp": true, "b@mp": false, "c@mp": true });
+  });
+
+  it("exclusive mode: a previously-enabled plugin outside the union is turned off", () => {
     const existing = { enabledPlugins: { "a@mp": true, "b@mp": true } };
 
-    const result = applier.apply(existing, union(["b@mp"]));
+    const result = applier.apply(existing, union(["b@mp"]), { exclusive: true });
 
-    // This is what makes `enable investing` a mode switch rather than an addition — the property
-    // a separate `switch` verb would otherwise have been built to provide.
     expect(result.enabledPlugins).toEqual({ "a@mp": false, "b@mp": true });
   });
 
-  it("keeps disabled plugin keys rather than deleting them", () => {
-    const result = applier.apply({ enabledPlugins: { "a@mp": true } }, union([]));
+  it("exclusive mode keeps disabled plugin keys rather than deleting them", () => {
+    const result = applier.apply({ enabledPlugins: { "a@mp": true } }, union([]), { exclusive: true });
 
     expect(Object.keys(result.enabledPlugins!)).toContain("a@mp");
     expect(result.enabledPlugins!["a@mp"]).toBe(false);
@@ -47,6 +56,29 @@ describe("SettingsApplier.apply", () => {
 
     expect(result.extraKnownMarketplaces!["mp"]).toEqual(githubSource("original/repo"));
     expect(result.extraKnownMarketplaces!["new"]).toEqual(githubSource("a/b"));
+  });
+
+  it("warns when a differing marketplace source is discarded, rather than staying silent", () => {
+    const logger = new Logger(LogLevel.WARN);
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const loggingApplier = new SettingsApplier(logger);
+    const existing = { extraKnownMarketplaces: { mp: githubSource("original/repo") } };
+
+    loggingApplier.apply(existing, union([], { mp: githubSource("other/repo") }));
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]![0]).toContain("mp");
+  });
+
+  it("does not warn when a matching marketplace source is re-declared", () => {
+    const logger = new Logger(LogLevel.WARN);
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const loggingApplier = new SettingsApplier(logger);
+    const existing = { extraKnownMarketplaces: { mp: githubSource("owner/repo") } };
+
+    loggingApplier.apply(existing, union([], { mp: githubSource("owner/repo") }));
+
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it("handles a settings file with no plugin keys at all", () => {

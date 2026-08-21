@@ -20,7 +20,9 @@ export class ListModulesCommand implements Command {
       const module = await this.moduleStore.load(name);
       const enabledCount = Object.values(module.enabledPlugins).filter(Boolean).length;
       const marketplaceCount = Object.keys(module.extraKnownMarketplaces).length;
-      this.logger.info(`${pc.bold(name)} — ${enabledCount} plugin(s) enabled, ${marketplaceCount} marketplace(s)`);
+      this.logger.info(
+        `${pc.bold(name)} (v${module.version}) — ${enabledCount} plugin(s) enabled, ${marketplaceCount} marketplace(s)`
+      );
     }
   }
 }

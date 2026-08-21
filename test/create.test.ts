@@ -22,6 +22,13 @@ describe("create", () => {
     expect(info.stdout).toContain("no plugins enabled");
   });
 
+  it("starts a new module at version 1.0.0", async () => {
+    await h.run(["create", "backend"]);
+
+    const info = await h.run(["info", "backend"]);
+    expect(info.stdout).toContain("(v1.0.0)");
+  });
+
   it("refuses to overwrite an existing module", async () => {
     await h.run(["create", "backend"]);
 
@@ -36,6 +43,16 @@ describe("create", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("Invalid module name");
+  });
+
+  it("treats an explicitly-empty name as a missing argument, not an invalid one", async () => {
+    // requirePositional's `!value` check catches an empty string before it ever reaches
+    // validateModuleName's own (separate) empty-name check, so the message names is about a
+    // missing argument rather than an invalid module name.
+    const result = await h.run(["create", ""]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Missing required argument");
   });
 
   it("writes nothing under --dry-run", async () => {
@@ -83,6 +100,13 @@ describe("create --from-scope", () => {
     expect(info.stdout).toContain("jdtls@mp");
     expect(info.stdout).toContain("quarkus@mp");
     expect(info.stdout).toContain("mp");
+  });
+
+  it("starts at version 1.0.0 even when seeded with multiple plugins", async () => {
+    await h.run(["create", "backend", "--from-scope", "local"]);
+
+    const info = await h.run(["info", "backend"]);
+    expect(info.stdout).toContain("(v1.0.0)");
   });
 
   it("skips explicit-false entries — those are overrides, not members of the set", async () => {
@@ -189,7 +213,7 @@ describe("create --compose", () => {
 
   it("sets composedModules and inherits the composed module's plugins", async () => {
     await h.run(["create", "base"]);
-    await h.run(["plugin", "install", "base-plugin@mp", "--module", "base", "--source", JSON.stringify(githubSource("owner/repo"))]);
+    await h.run(["plugin", "install", "base", "base-plugin@mp", "--source", JSON.stringify(githubSource("owner/repo"))]);
 
     const result = await h.run(["create", "frontend", "--compose", "base"]);
 

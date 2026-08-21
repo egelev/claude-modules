@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { Paths } from "../util/Paths.js";
+import { readOptionalJsonFile } from "../util/jsonFile.js";
 import { KnownMarketplacesFile, MarketplaceSource } from "./types.js";
 
 /** Reads Claude Code's own marketplace cache (~/.claude/plugins/known_marketplaces.json), read-only. */
@@ -15,10 +15,10 @@ export class KnownMarketplacesCache {
   }
 
   private async readFile(): Promise<KnownMarketplacesFile> {
-    const raw = await readFile(this.paths.knownMarketplacesFile, "utf8").catch((err) => {
-      if (err.code === "ENOENT") return null;
-      throw err;
-    });
-    return raw === null ? {} : (JSON.parse(raw) as KnownMarketplacesFile);
+    return readOptionalJsonFile<KnownMarketplacesFile>(
+      this.paths.knownMarketplacesFile,
+      () => ({}),
+      `Claude Code's known_marketplaces.json (${this.paths.knownMarketplacesFile})`
+    );
   }
 }

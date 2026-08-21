@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { join } from "node:path";
 import { ApplyModulesUseCase } from "../src/core/ApplyModulesUseCase.js";
 import { EnabledPluginsReporter } from "../src/core/EnabledPluginsReporter.js";
 import { InstalledPluginsCache } from "../src/core/InstalledPluginsCache.js";
 import { KnownMarketplacesCache } from "../src/core/KnownMarketplacesCache.js";
 import { MarketplaceCacheInstaller } from "../src/core/MarketplaceCacheInstaller.js";
-import { ClaudeRunResult, PluginCacheInstaller } from "../src/core/PluginCacheInstaller.js";
+import { ClaudeRunResult } from "../src/core/ClaudeRunner.js";
+import { PluginCacheInstaller } from "../src/core/PluginCacheInstaller.js";
 import { CompositionResolver } from "../src/core/CompositionResolver.js";
 import { ModuleResolver } from "../src/core/ModuleResolver.js";
 import { ModuleStore } from "../src/core/ModuleStore.js";
@@ -62,7 +64,7 @@ describe("ApplyModulesUseCase", () => {
       runClaude
     );
     const settingsRepository = new SettingsRepository();
-    const settingsApplier = new SettingsApplier();
+    const settingsApplier = new SettingsApplier(logger);
     const enabledPluginsReporter = new EnabledPluginsReporter(
       scopeResolver,
       settingsRepository,
@@ -109,7 +111,28 @@ describe("ApplyModulesUseCase", () => {
 
     await build().run(["backend"], Scope.Local, h.repoRoot, false, true, false);
 
-    expect(runs).toEqual([["plugin", "install", "a@mp", "--scope", "user", "-y"]]);
+    expect(runs).toEqual([["plugin", "install", "a@mp", "--scope", "local", "-y"]]);
+  });
+
+  it("threads the actual target scope through to the shell-out, not a hardcoded 'user'", async () => {
+    // Regression test for the scope-leak this tool's own audit found: --install used to always shell
+    // out with '--scope user' regardless of which scope the module was actually being applied to,
+    // which durably enabled the plugin at the user's real global scope even for a project/local-only
+    // module. The marketplace-add and plugin-install shell-outs must both land at the scope actually
+    // being written here.
+    await h.writeInstalledPlugins([]);
+    const onRun = async (args: string[]) => {
+      if (args[0] === "plugin" && args[1] === "marketplace" && args[2] === "add") {
+        await h.writeKnownMarketplaces({ mp: githubSource("owner/repo") });
+      }
+    };
+
+    await build({ ok: true, stdout: "" }, onRun).run(["backend"], Scope.Project, h.repoRoot, false, true, false);
+
+    expect(runs).toEqual([
+      ["plugin", "marketplace", "add", "owner/repo", "--scope", "project"],
+      ["plugin", "install", "a@mp", "--scope", "project", "-y"],
+    ]);
   });
 
   it("never invokes the runner when install is true but the plugin is already cached", async () => {
@@ -144,8 +167,8 @@ describe("ApplyModulesUseCase", () => {
     await build({ ok: true, stdout: "" }, onRun).run(["backend"], Scope.Local, h.repoRoot, false, true, false);
 
     expect(runs).toEqual([
-      ["plugin", "marketplace", "add", "owner/repo", "--scope", "user"],
-      ["plugin", "install", "a@mp", "--scope", "user", "-y"],
+      ["plugin", "marketplace", "add", "owner/repo", "--scope", "local"],
+      ["plugin", "install", "a@mp", "--scope", "local", "-y"],
     ]);
   });
 
@@ -155,7 +178,7 @@ describe("ApplyModulesUseCase", () => {
 
     await build().run(["backend"], Scope.Local, h.repoRoot, false, true, false);
 
-    expect(runs).toEqual([["plugin", "install", "a@mp", "--scope", "user", "-y"]]);
+    expect(runs).toEqual([["plugin", "install", "a@mp", "--scope", "local", "-y"]]);
   });
 
   it("returns this run's own marketplace names and the still-uncached subset", async () => {
@@ -193,5 +216,42 @@ describe("ApplyModulesUseCase", () => {
     expect(result.marketplaceNames).toEqual(new Set(["odd"]));
     expect(result.uncachedMarketplaceNames).toEqual([]);
     expect(runs).toEqual([]);
+  });
+
+  describe("merge vs. exclusive apply", () => {
+    beforeEach(async () => {
+      await h.writeModule("frontend", { enabledPlugins: { "f@mp": true }, extraKnownMarketplaces: {} });
+    });
+
+    it("merges by default: enabling a second module leaves the first module's plugin on", async () => {
+      await h.writeInstalledPlugins([]);
+      await build().run(["backend"], Scope.Local, h.repoRoot, false, false, false);
+
+      await build().run(["frontend"], Scope.Local, h.repoRoot, false, false, false);
+
+      const settings = JSON.parse(await h.readFileAt(join(".claude", "settings.local.json")));
+      expect(settings.enabledPlugins).toEqual({ "a@mp": true, "f@mp": true });
+    });
+
+    it("--only replaces: enabling a second module with only=true turns the first module's plugin off", async () => {
+      await h.writeInstalledPlugins([]);
+      await build().run(["backend"], Scope.Local, h.repoRoot, false, false, false);
+
+      await build().run(["frontend"], Scope.Local, h.repoRoot, true, false, false);
+
+      const settings = JSON.parse(await h.readFileAt(join(".claude", "settings.local.json")));
+      expect(settings.enabledPlugins).toEqual({ "a@mp": false, "f@mp": true });
+    });
+  });
+
+  describe("--only outside a git repository", () => {
+    it("does not throw when the default (local) scope has no repository to resolve project scope against", async () => {
+      await h.writeInstalledPlugins([]);
+
+      const result = await build().run(["backend"], Scope.Local, h.nonRepoDir, true, false, false);
+
+      expect(result.resolvedScope.scope).toBe(Scope.Local);
+      expect(result.enabledPluginNames).toEqual(new Set(["a@mp"]));
+    });
   });
 });

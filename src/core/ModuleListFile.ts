@@ -1,8 +1,10 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { atomicWriteFile } from "../util/atomicWrite.js";
+import { isFile } from "../util/fsProbe.js";
 import { validateModuleName } from "./moduleName.js";
 import { RepoLocator } from "./RepoLocator.js";
+import { resolveScopeRoot } from "./scopeRoot.js";
 import { Scope } from "./types.js";
 import { Paths } from "../util/Paths.js";
 import { ScopeRequiredError } from "../util/errors.js";
@@ -12,7 +14,7 @@ const LOCAL_FILE = ".claude-modules.local";
 const USER_FILE = "user.modules";
 
 /**
- * The persisted list of module names behind `enable --persist` and `reload` — one file per scope,
+ * The saved list of module names behind `enable --save` and `reload` — one file per scope,
  * each living with the thing it describes:
  *
  * | Scope     | File                                |                                             |
@@ -22,11 +24,11 @@ const USER_FILE = "user.modules";
  * | `local`   | `<repoRoot>/.claude-modules.local`  | personal to this checkout, gitignore it     |
  *
  * They were previously one scope-blind `.claude-modules` found by walking up from the cwd, which
- * produced two bugs: `enable --scope user --persist` dropped a file into whatever directory it ran
+ * produced two bugs: `enable --scope user --save` dropped a file into whatever directory it ran
  * from — inside a repository, where local-scope `reload`/`status` would then pick it up — and
- * persisting at one repo scope silently overwrote the other's list.
+ * saving at one repo scope silently overwrote the other's list.
  *
- * This class is the single place that knows the layout; `enable --persist`, `reload`, and
+ * This class is the single place that knows the layout; `enable --save`, `reload`, and
  * `status`'s drift check all resolve through it so they cannot disagree.
  */
 export class ModuleListFile {
@@ -35,13 +37,17 @@ export class ModuleListFile {
     private readonly repoLocator: RepoLocator
   ) {}
 
-  /** Where `--persist` writes for `scope` — the same file `find` reads back. */
+  /** Where `--save` writes for `scope` — the same file `find` reads back. */
   async pathFor(scope: Scope, cwd: string): Promise<string> {
     if (scope === Scope.User) return join(this.paths.home, USER_FILE);
 
     const root = await this.rootFor(scope, cwd);
     if (!root) throw new ScopeRequiredError(scope);
-    return join(root, scope === Scope.Project ? PROJECT_FILE : LOCAL_FILE);
+    return join(root, this.fileNameFor(scope));
+  }
+
+  private fileNameFor(scope: Scope.Project | Scope.Local): string {
+    return scope === Scope.Project ? PROJECT_FILE : LOCAL_FILE;
   }
 
   /**
@@ -50,15 +56,13 @@ export class ModuleListFile {
    * Code reads `.claude-modules.local`'s companion settings file straight from cwd), else `null`
    * for `project` scope, which is meant to be shared via a repository.
    */
-  private async rootFor(scope: Scope, cwd: string): Promise<string | null> {
-    const repoRoot = await this.repoLocator.findRepoRoot(cwd);
-    if (repoRoot) return repoRoot;
-    return scope === Scope.Local ? cwd : null;
+  private async rootFor(scope: Scope.Project | Scope.Local, cwd: string): Promise<string | null> {
+    return resolveScopeRoot(this.repoLocator, scope, cwd);
   }
 
   /**
    * Where to read `scope`'s list from, or `null` if it has none — always the same file `pathFor`
-   * would write, so `enable --persist` and `reload` cannot disagree.
+   * would write, so `enable --save` and `reload` cannot disagree.
    *
    * Repo-scoped lists are searched for by walking up from `cwd` to the repository root, so `reload`
    * works from any subdirectory. The user-scope list has one fixed location and no search — the cwd
@@ -73,14 +77,14 @@ export class ModuleListFile {
 
     const root = await this.rootFor(scope, cwd);
     if (!root) return null;
-    return this.findUpward(cwd, root, scope === Scope.Project ? PROJECT_FILE : LOCAL_FILE);
+    return this.findUpward(cwd, root, this.fileNameFor(scope));
   }
 
   /** Human-readable description of where `find` looks, for "nothing found" errors. */
   async searchDescription(scope: Scope, cwd: string): Promise<string> {
     if (scope === Scope.User) return join(this.paths.home, USER_FILE);
     const root = await this.rootFor(scope, cwd);
-    const name = scope === Scope.Project ? PROJECT_FILE : LOCAL_FILE;
+    const name = this.fileNameFor(scope);
     return root && root !== cwd ? `${name}, between ${cwd} and repo root ${root}` : `${name}, in ${cwd}`;
   }
 
@@ -108,7 +112,7 @@ export class ModuleListFile {
     return names;
   }
 
-  /** Resolves an explicit `--persist=<path>` / `--file <path>` against `cwd`. */
+  /** Resolves an explicit `--save=<path>` / `--file <path>` against `cwd`. */
   resolveExplicitPath(cwd: string, filePath: string): string {
     return resolve(cwd, filePath);
   }
@@ -119,10 +123,4 @@ export class ModuleListFile {
     await atomicWriteFile(targetPath, `${moduleNames.join("\n")}\n`);
     return targetPath;
   }
-}
-
-async function isFile(path: string): Promise<boolean> {
-  return stat(path)
-    .then((s) => s.isFile())
-    .catch(() => false);
 }

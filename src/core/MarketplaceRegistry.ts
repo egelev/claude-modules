@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { Paths } from "../util/Paths.js";
 import { atomicWriteFile, toJsonWithTrailingNewline } from "../util/atomicWrite.js";
 import { MarketplaceNotFoundError } from "../util/errors.js";
+import { readOptionalJsonFile } from "../util/jsonFile.js";
 import { MarketplaceRegistryFile, MarketplaceSource } from "./types.js";
 
 /** The global marketplace registry kept in $CLAUDE_MODULES_HOME/settings.json, populated by `marketplace add`. */
@@ -11,6 +11,11 @@ export class MarketplaceRegistry {
   async get(name: string): Promise<MarketplaceSource | undefined> {
     const file = await this.readFile();
     return file.marketplaces[name];
+  }
+
+  async list(): Promise<Record<string, MarketplaceSource>> {
+    const file = await this.readFile();
+    return file.marketplaces;
   }
 
   async set(name: string, source: MarketplaceSource): Promise<void> {
@@ -29,12 +34,11 @@ export class MarketplaceRegistry {
   }
 
   private async readFile(): Promise<MarketplaceRegistryFile> {
-    const raw = await readFile(this.paths.globalSettingsFile, "utf8").catch((err) => {
-      if (err.code === "ENOENT") return null;
-      throw err;
-    });
-    if (raw === null) return { marketplaces: {} };
-    const parsed = JSON.parse(raw) as Partial<MarketplaceRegistryFile>;
+    const parsed = await readOptionalJsonFile<Partial<MarketplaceRegistryFile>>(
+      this.paths.globalSettingsFile,
+      () => ({}),
+      `Marketplace registry (${this.paths.globalSettingsFile})`
+    );
     return { ...parsed, marketplaces: parsed.marketplaces ?? {} };
   }
 }

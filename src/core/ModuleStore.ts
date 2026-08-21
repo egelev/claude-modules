@@ -2,7 +2,8 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import { Paths } from "../util/Paths.js";
 import { atomicWriteFile, toJsonWithTrailingNewline } from "../util/atomicWrite.js";
 import { ModuleExistsError, ModuleNotFoundError } from "../util/errors.js";
-import { emptyModule, Module } from "./types.js";
+import { readOptionalJsonFile } from "../util/jsonFile.js";
+import { emptyModule, Module, normalizeModule } from "./types.js";
 import { validateModuleName } from "./moduleName.js";
 
 /** CRUD over module directories (each holding a settings.json) under $CLAUDE_MODULES_HOME/modules. */
@@ -28,16 +29,15 @@ export class ModuleStore {
 
   async load(name: string): Promise<Module> {
     validateModuleName(name);
-    const raw = await readFile(this.paths.moduleSettingsFile(name), "utf8").catch((err) => {
-      if (err.code === "ENOENT" || err.code === "ENOTDIR") throw new ModuleNotFoundError(name);
-      throw err;
-    });
-    const parsed = JSON.parse(raw) as Partial<Module>;
-    return {
-      enabledPlugins: parsed.enabledPlugins ?? {},
-      extraKnownMarketplaces: parsed.extraKnownMarketplaces ?? {},
-      composedModules: parsed.composedModules ?? [],
-    };
+    const parsed = await readOptionalJsonFile<Partial<Module>>(
+      this.paths.moduleSettingsFile(name),
+      () => {
+        throw new ModuleNotFoundError(name);
+      },
+      `Module '${name}' (${this.paths.moduleSettingsFile(name)})`,
+      (err) => err.code === "ENOENT" || err.code === "ENOTDIR"
+    );
+    return normalizeModule(parsed, name);
   }
 
   async create(name: string): Promise<void> {
@@ -53,6 +53,12 @@ export class ModuleStore {
     const { composedModules, ...rest } = module;
     const serializable = composedModules.length > 0 ? { ...rest, composedModules } : rest;
     await atomicWriteFile(this.paths.moduleSettingsFile(name), toJsonWithTrailingNewline(serializable));
+  }
+
+  /** Bumps `module.version` in place via `bump`, then saves — the mutate-bump-save idiom every write path uses. */
+  async saveWithBump(name: string, module: Module, bump: (version: string) => string): Promise<void> {
+    module.version = bump(module.version);
+    await this.save(name, module);
   }
 
   async remove(name: string): Promise<void> {

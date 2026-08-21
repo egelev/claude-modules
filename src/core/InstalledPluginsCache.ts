@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { Paths } from "../util/Paths.js";
+import { readOptionalJsonFile } from "../util/jsonFile.js";
 import { InstalledPluginsFile } from "./types.js";
 
 /** Reads Claude Code's own plugin cache registry (~/.claude/plugins/installed_plugins.json), read-only. */
@@ -16,12 +16,11 @@ export class InstalledPluginsCache {
   }
 
   private async readFile(): Promise<InstalledPluginsFile> {
-    const raw = await readFile(this.paths.installedPluginsFile, "utf8").catch((err) => {
-      if (err.code === "ENOENT") return null;
-      throw err;
-    });
-    if (raw === null) return { plugins: {} };
-    const parsed = JSON.parse(raw) as Partial<InstalledPluginsFile>;
+    const parsed = await readOptionalJsonFile<Partial<InstalledPluginsFile>>(
+      this.paths.installedPluginsFile,
+      () => ({}),
+      `Claude Code's installed_plugins.json (${this.paths.installedPluginsFile})`
+    );
     return { ...parsed, plugins: parsed.plugins ?? {} };
   }
 }

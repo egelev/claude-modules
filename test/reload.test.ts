@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { Harness } from "./helpers/harness.js";
+import { Harness, githubSource } from "./helpers/harness.js";
 
 describe("reload", () => {
   let h: Harness;
@@ -17,7 +17,7 @@ describe("reload", () => {
     await h.cleanup();
   });
 
-  it("re-applies the persisted module list", async () => {
+  it("re-applies the saved module list", async () => {
     await h.writeFileAt(".claude-modules.local", "backend\nfrontend\n");
 
     const result = await h.run(["reload"]);
@@ -71,10 +71,21 @@ describe("reload", () => {
     expect(result.stderr).toContain("No such file");
   });
 
-  it("reports a still-missing plugin without ever mentioning --install, which reload has no flag for", async () => {
-    // reload always attempts the install-cache step (hardcoded install: true — see
-    // ApplyModulesUseCase.run), unlike enable, where --install is opt-in. The "not cached" block is
-    // shared code, so its wording must stay generic here: reload has no --install flag to point at.
+  it("names the list file when a listed module was since removed, rather than a bare 'does not exist'", async () => {
+    await h.writeFileAt(".claude-modules.local", "backend\nghost\n");
+
+    const result = await h.run(["reload"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain("Module 'ghost' does not exist");
+    expect(result.stderr).toContain(".claude-modules.local");
+    expect(result.stderr).toContain("edit that file");
+  });
+
+  it("reports a still-missing plugin and points at --install, now that reload defaults install to false like enable", async () => {
+    // reload used to always attempt the install-cache step (hardcoded install: true). It now
+    // defaults to false, same as enable, and takes its own --install flag — so a plain reload gets
+    // the same "Run with --install" hint enable (without --install) already gets.
     await h.writeModule("uncached", { enabledPlugins: { "uncached@mp": true }, extraKnownMarketplaces: {} });
     await h.writeFileAt(".claude-modules.local", "uncached\n");
 
@@ -82,15 +93,126 @@ describe("reload", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("Plugin(s) not cached by Claude Code:");
-    expect(result.output).not.toContain("--install");
+    expect(result.output).toContain("Run with --install");
+  });
+});
+
+describe("reload --install", () => {
+  let h: Harness;
+
+  beforeEach(async () => {
+    h = await Harness.create();
+    await h.writeModule("uncached", {
+      enabledPlugins: { "uncached@mp": true },
+      extraKnownMarketplaces: { mp: githubSource("owner/repo") },
+    });
+    // Deliberately left out of Claude Code's own cache — this is what exercises the "still not
+    // cached" path.
+    await h.writeInstalledPlugins([]);
+  });
+
+  afterEach(async () => {
+    await h.cleanup();
+  });
+
+  it("never shells out to claude without --install", async () => {
+    await h.writeFileAt(".claude-modules.local", "uncached\n");
+
+    const result = await h.run(["reload"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Plugin(s) not cached by Claude Code:");
+    expect(result.stdout).toContain("claude plugin install uncached@mp --scope user -y");
+    expect(result.stdout).toContain("Run with --install");
+    expect(result.output).not.toContain("installed it now");
+    expect(result.output).not.toContain("Failed to install");
+  });
+
+  it("exits 2 when --install can't fix it because the marketplace is unknown to Claude Code — full symmetry with enable --install", async () => {
+    // Mirrors test/enable.test.ts's "exits 2 when --install can't fix it because the marketplace is
+    // unknown to Claude Code": with the marketplace unknown, both the marketplace-add and
+    // plugin-install paths fail (no real 'claude' on PATH in this harness), and reload --install now
+    // fails the run for it, same as enable --install.
+    await h.writeFileAt(".claude-modules.local", "uncached\n");
+
+    const result = await h.run(["reload", "--install"]);
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("still not cached by Claude Code after --install");
+    expect(result.stderr).toContain("isn't in its known_marketplaces.json either");
+    expect(result.stderr).toContain("still not known to Claude Code after --install");
+    expect(result.stderr).toContain("Failed to add marketplace");
+  });
+
+  it("exits 0 with --install when the only missing marketplace has a source this tool can't convert to a CLI spec", async () => {
+    await h.writeModule("odd-source", {
+      enabledPlugins: {},
+      extraKnownMarketplaces: { odd: { nope: true } },
+    });
+    await h.writeFileAt(".claude-modules.local", "odd-source\n");
+
+    const result = await h.run(["reload", "--install"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("isn't a shape this tool can");
+  });
+
+  it("exits 2 when --install can't fix it because claude is unreachable", async () => {
+    // The marketplace is known this time, so the plugin-install attempt proceeds past that check
+    // into runClaude — which fails here because the harness's env never sets PATH.
+    await h.writeKnownMarketplaces({ mp: githubSource("owner/repo") });
+    await h.writeFileAt(".claude-modules.local", "uncached\n");
+
+    const result = await h.run(["reload", "--install"]);
+
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("'claude' not found on PATH");
+  });
+
+  it("exits 0 with --install when nothing ends up missing", async () => {
+    await h.writeModule("backend", { enabledPlugins: { "jdtls@mp": true }, extraKnownMarketplaces: {} });
+    await h.writeInstalledPlugins(["jdtls@mp"]);
+    await h.writeFileAt(".claude-modules.local", "backend\n");
+
+    const result = await h.run(["reload", "--install"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("Plugin(s) not cached by Claude Code:");
+  });
+
+  it("suppresses the exit-2 failure under --dry-run, since nothing was actually attempted", async () => {
+    await h.writeFileAt(".claude-modules.local", "uncached\n");
+
+    const result = await h.run(["reload", "--install", "--dry-run"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("[dry-run]");
+    expect(result.stdout).toContain("nothing was actually run");
+    expect(result.stderr).not.toContain("Error:");
+  });
+
+  it("does not fail on an uncached plugin from a broader scope that this run didn't touch", async () => {
+    // The exit-2 check must be scoped to this run's own union, not the whole report: a plugin left
+    // uncached by some unrelated command, in a scope this module selection never mentions, isn't
+    // this run's failure to report.
+    await h.writeModule("cachedonly", { enabledPlugins: { "a@mp": true }, extraKnownMarketplaces: {} });
+    await h.writeInstalledPlugins(["a@mp"]);
+    await h.writeSettings("user", { enabledPlugins: { "other@mp": true } });
+    await h.writeFileAt(".claude-modules.local", "cachedonly\n");
+
+    const result = await h.run(["reload", "--install"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Plugin(s) not cached by Claude Code:");
+    expect(result.stdout).toContain("other@mp");
   });
 });
 
 /**
- * Composition is re-expanded fresh on every `resolve()` call, never persisted as an expanded set —
- * `enable --persist` only writes the composite module's own name (see
+ * Composition is re-expanded fresh on every `resolve()` call, never saved as an expanded set —
+ * `enable --save` only writes the composite module's own name (see
  * module-composability.plan.md §3). So editing what a composed module contributes must be picked
- * up by `status`/`reload` without re-running `--persist`.
+ * up by `status`/`reload` without re-running `--save`.
  */
 describe("reload/status with a composite module", () => {
   let h: Harness;
@@ -110,8 +232,8 @@ describe("reload/status with a composite module", () => {
     await h.cleanup();
   });
 
-  it("status reports no drift right after persisting a composite module", async () => {
-    await h.run(["enable", "frontend", "--persist"]);
+  it("status reports no drift right after saving a composite module", async () => {
+    await h.run(["enable", "frontend", "--save"]);
 
     const result = await h.run(["status"]);
 
@@ -119,8 +241,8 @@ describe("reload/status with a composite module", () => {
     expect(result.stdout).toContain("In sync");
   });
 
-  it("status reports drift once the composed module gains a plugin, with no re-persist", async () => {
-    await h.run(["enable", "frontend", "--persist"]);
+  it("status reports drift once the composed module gains a plugin, with no re-save", async () => {
+    await h.run(["enable", "frontend", "--save"]);
     await h.writeModule("base", {
       enabledPlugins: { "jdtls@mp": true, "eslint@mp": true },
       extraKnownMarketplaces: {},
@@ -133,7 +255,7 @@ describe("reload/status with a composite module", () => {
   });
 
   it("reload re-expands the composed module fresh and picks up its new plugin", async () => {
-    await h.run(["enable", "frontend", "--persist"]);
+    await h.run(["enable", "frontend", "--save"]);
     await h.writeModule("base", {
       enabledPlugins: { "jdtls@mp": true, "eslint@mp": true },
       extraKnownMarketplaces: {},
@@ -172,8 +294,8 @@ describe("reload outside a git repository", () => {
     await h.cleanup();
   });
 
-  it("round-trips enable --persist and reload with no repository", async () => {
-    const enabled = await h.run(["enable", "investing", "--scope", "user", "--persist"], h.nonRepoDir);
+  it("round-trips enable --save and reload with no repository", async () => {
+    const enabled = await h.run(["enable", "investing", "--scope", "user", "--save"], h.nonRepoDir);
     expect(enabled.code).toBe(0);
     // The list belongs to the tool's own home, not whatever directory this happened to run in.
     expect(await h.readModuleList("user")).toBe("investing\n");
@@ -185,7 +307,7 @@ describe("reload outside a git repository", () => {
   });
 
   it("reloads the user list from any directory, not just where enable ran", async () => {
-    await h.run(["enable", "investing", "--scope", "user", "--persist"], h.nonRepoDir);
+    await h.run(["enable", "investing", "--scope", "user", "--save"], h.nonRepoDir);
 
     // A fixed global location means the cwd is irrelevant — the old cwd-anchored file was only
     // findable from the exact directory that wrote it.
@@ -195,10 +317,10 @@ describe("reload outside a git repository", () => {
     expect((await h.readSettings("user")).enabledPlugins).toEqual({ "markets@mp": true });
   });
 
-  it("does not leave a module list inside the repository when persisting at user scope", async () => {
+  it("does not leave a module list inside the repository when saving at user scope", async () => {
     // The reported bug: a stray .claude-modules in the repo that local-scope reload/status then
     // picked up by upward search.
-    await h.run(["enable", "investing", "--scope", "user", "--persist"], h.repoRoot);
+    await h.run(["enable", "investing", "--scope", "user", "--save"], h.repoRoot);
 
     expect(await h.moduleListExists("local")).toBe(false);
     expect(await h.moduleListExists("project")).toBe(false);
@@ -212,10 +334,10 @@ describe("reload outside a git repository", () => {
     expect(result.stderr).toContain("No module list found for user scope");
   });
 
-  it("round-trips enable --persist and reload at local scope with no repository", async () => {
-    // Exercises ModuleListFile's cwd fallback directly: --persist must write where find() will
+  it("round-trips enable --save and reload at local scope with no repository", async () => {
+    // Exercises ModuleListFile's cwd fallback directly: --save must write where find() will
     // actually look, both anchored on h.nonRepoDir since there's no repository to walk up to.
-    const enabled = await h.run(["enable", "investing", "--persist"], h.nonRepoDir);
+    const enabled = await h.run(["enable", "investing", "--save"], h.nonRepoDir);
     expect(enabled.code).toBe(0);
     expect(await h.readFileAt(".claude-modules.local", h.nonRepoDir)).toBe("investing\n");
 

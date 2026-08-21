@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { RepoLocator } from "./RepoLocator.js";
+import { resolveScopeRoot } from "./scopeRoot.js";
 import { applicableScopes, Scope } from "./types.js";
 import { ScopeRequiredError } from "../util/errors.js";
 import { Paths } from "../util/Paths.js";
@@ -24,18 +25,12 @@ export class ScopeResolver {
       return { scope, settingsPath: join(this.paths.claudeHome, "settings.json"), repoRoot: null };
     }
 
-    const repoRoot = await this.repoLocator.findRepoRoot(cwd);
-    if (!repoRoot) {
-      if (scope === Scope.Project) {
-        throw new ScopeRequiredError(scope);
-      }
-      // No repository to anchor to — local scope falls back to cwd itself, which is exactly
-      // where Claude Code looks for .claude/settings.local.json regardless of git.
-      this.logger.warn(`No git repository found; using ${cwd} as the local-scope root.`);
-      return { scope, settingsPath: repoScopePath(scope, cwd), repoRoot: cwd };
+    const root = await resolveScopeRoot(this.repoLocator, scope, cwd, this.logger);
+    if (!root) {
+      throw new ScopeRequiredError(scope);
     }
 
-    return { scope, settingsPath: repoScopePath(scope, repoRoot), repoRoot };
+    return { scope, settingsPath: repoScopePath(scope, root), repoRoot: root };
   }
 
   /**

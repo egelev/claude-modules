@@ -6,6 +6,7 @@ import { SettingsApplier } from "./SettingsApplier.js";
 import { EnabledPluginsReporter } from "./EnabledPluginsReporter.js";
 import { Scope } from "./types.js";
 import { logSessionReloadHint } from "./sessionReloadHint.js";
+import { writeSettingsUnlessDryRun } from "./dryRunWrite.js";
 import { Logger } from "../util/Logger.js";
 
 /** Shared by `disable` and `disable-all`: resolve a scope's settings.json and flip plugins off. */
@@ -25,11 +26,7 @@ export class DisableModulesUseCase {
     const pluginNames = await this.moduleResolver.resolveEnabledPluginNames(moduleNames);
     const existing = await this.settingsRepository.read(resolvedScope.settingsPath);
     const updated = this.settingsApplier.disable(existing, pluginNames);
-    if (dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would write ${pc.bold(resolvedScope.settingsPath)} — no files modified.`);
-    } else {
-      await this.settingsRepository.write(resolvedScope.settingsPath, updated);
-    }
+    await writeSettingsUnlessDryRun(this.settingsRepository, this.logger, dryRun, resolvedScope.settingsPath, updated);
 
     const verb = dryRun ? "Would disable" : "Disabled";
     this.logger.info(
@@ -45,11 +42,7 @@ export class DisableModulesUseCase {
     const resolvedScope = await this.scopeResolver.resolve(scope, cwd);
     const existing = await this.settingsRepository.read(resolvedScope.settingsPath);
     const updated = this.settingsApplier.disableAll(existing);
-    if (dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would write ${pc.bold(resolvedScope.settingsPath)} — no files modified.`);
-    } else {
-      await this.settingsRepository.write(resolvedScope.settingsPath, updated);
-    }
+    await writeSettingsUnlessDryRun(this.settingsRepository, this.logger, dryRun, resolvedScope.settingsPath, updated);
 
     const verb = dryRun ? "Would disable" : "Disabled";
     this.logger.info(`${verb} all plugins in ${resolvedScope.scope} scope (${pc.bold(resolvedScope.settingsPath)}).`);

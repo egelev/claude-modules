@@ -27,7 +27,8 @@ export class CreateModuleCommand implements Command {
     private readonly scopeResolver: ScopeResolver,
     private readonly settingsRepository: SettingsRepository,
     private readonly compositionResolver: CompositionResolver,
-    /** Module names this module composes, from repeatable --compose. Only settable at creation time. */
+    /** Module names this module composes, from repeatable --compose. Sets the initial composition
+     * only — ComposeAddCommand/ComposeRemoveCommand change it later, no hand-editing required. */
     private readonly composeOf: readonly string[]
   ) {}
 
@@ -66,7 +67,7 @@ export class CreateModuleCommand implements Command {
     if (this.fromScope !== undefined && pluginCount === 0) {
       this.logger.warn(
         `No plugins were enabled in ${this.fromScope} scope, so '${pc.bold(this.name)}' is empty. ` +
-          `Add plugins with 'claude-modules plugin install <plugin>@<marketplace> --module ${this.name}'.`
+          `Add plugins with 'claude-modules plugin install ${this.name} <plugin>@<marketplace>'.`
       );
     }
   }
@@ -96,7 +97,7 @@ export class CreateModuleCommand implements Command {
     }
 
     return {
-      module: { enabledPlugins, extraKnownMarketplaces, composedModules: [] },
+      module: { version: "1.0.0", enabledPlugins, extraKnownMarketplaces, composedModules: [] },
       origin: ` from ${this.fromScope} scope (${pc.bold(resolved.settingsPath)})`,
     };
   }

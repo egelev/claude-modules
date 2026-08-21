@@ -1,8 +1,8 @@
 import pc from "picocolors";
 import { KnownMarketplacesCache } from "./KnownMarketplacesCache.js";
 import { marketplaceSpecFromSource } from "./marketplaceSpec.js";
-import { ClaudeRunner, defaultClaudeRunner } from "./PluginCacheInstaller.js";
-import { MarketplaceSource } from "./types.js";
+import { ClaudeRunner, defaultClaudeRunner } from "./ClaudeRunner.js";
+import { MarketplaceSource, Scope } from "./types.js";
 import { Logger } from "../util/Logger.js";
 
 /**
@@ -19,7 +19,13 @@ export class MarketplaceCacheInstaller {
     private readonly runClaude: ClaudeRunner = defaultClaudeRunner
   ) {}
 
-  async ensureCached(marketplaces: Readonly<Record<string, MarketplaceSource>>, dryRun: boolean): Promise<void> {
+  /** `scope` defaults to `user`; `enable --install`/`reload --install` pass the real target scope
+   * instead, since `claude plugin marketplace add` writes its entry at whatever scope this runs with. */
+  async ensureCached(
+    marketplaces: Readonly<Record<string, MarketplaceSource>>,
+    dryRun: boolean,
+    scope: Scope = Scope.User
+  ): Promise<void> {
     for (const [name, source] of Object.entries(marketplaces)) {
       if ((await this.knownMarketplacesCache.get(name)) !== undefined) {
         this.logger.debug(`Marketplace '${pc.bold(name)}' already known to Claude Code.`);
@@ -29,12 +35,12 @@ export class MarketplaceCacheInstaller {
         const spec = marketplaceSpecFromSource(source);
         const action =
           spec !== undefined
-            ? `would run 'claude plugin marketplace add ${spec} --scope user'`
+            ? `would run 'claude plugin marketplace add ${spec} --scope ${scope}'`
             : "would need manual addition — its source isn't a shape this tool can convert to a CLI spec";
         this.logger.info(`${pc.dim("[dry-run]")} Marketplace '${pc.bold(name)}' isn't known to Claude Code — ${action}.`);
         continue;
       }
-      await this.installOne(name, source);
+      await this.installOne(name, source, scope);
     }
   }
 
@@ -47,7 +53,7 @@ export class MarketplaceCacheInstaller {
     return result.sort();
   }
 
-  private async installOne(name: string, source: MarketplaceSource): Promise<void> {
+  private async installOne(name: string, source: MarketplaceSource, scope: Scope): Promise<void> {
     const spec = marketplaceSpecFromSource(source);
     if (spec === undefined) {
       this.logger.warn(
@@ -57,17 +63,17 @@ export class MarketplaceCacheInstaller {
       return;
     }
 
-    const result = await this.runClaude(["plugin", "marketplace", "add", spec, "--scope", "user"], this.env);
+    const result = await this.runClaude(["plugin", "marketplace", "add", spec, "--scope", scope], this.env);
     if (result.ok) {
       this.logger.info(
         `Marketplace '${pc.bold(name)}' wasn't known to Claude Code yet — added it now via ` +
-          `'claude plugin marketplace add' (scope: user).`
+          `'claude plugin marketplace add' (scope: ${scope}).`
       );
     } else {
       this.logger.warn(
         `Failed to add marketplace '${pc.bold(name)}' to Claude Code (${result.detail}).\n  It's declared in the ` +
           `module/settings, but plugin installs from it may fail until you run ` +
-          `'claude plugin marketplace add ${spec} --scope user' manually.`
+          `'claude plugin marketplace add ${spec} --scope ${scope}' manually.`
       );
     }
   }

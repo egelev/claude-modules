@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { InstalledPluginsCache } from "../src/core/InstalledPluginsCache.js";
 import { KnownMarketplacesCache } from "../src/core/KnownMarketplacesCache.js";
-import { ClaudeRunResult, PluginCacheInstaller } from "../src/core/PluginCacheInstaller.js";
+import { ClaudeRunResult } from "../src/core/ClaudeRunner.js";
+import { PluginCacheInstaller } from "../src/core/PluginCacheInstaller.js";
+import { Scope } from "../src/core/types.js";
 import { Paths } from "../src/util/Paths.js";
 import { Logger, LogLevel } from "../src/util/Logger.js";
 
@@ -154,6 +156,58 @@ describe("PluginCacheInstaller", () => {
     // The settings write is the primary operation; a caching failure must never undo it.
     await expect(
       build([], { ok: false, detail: "no network" }).ensureCached(["a@mp"], false)
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
+  });
+
+  it("threads a non-default scope through to the shell-out", async () => {
+    await writeInstalledPlugins({ version: 2, plugins: {} });
+    await writeFile(
+      join(claudeHome, "plugins", "known_marketplaces.json"),
+      JSON.stringify({ mp: { source: { source: "github", repo: "owner/repo" } } }),
+      "utf8"
+    );
+    const runs: string[][] = [];
+
+    await build(runs).ensureCached(["a@mp"], false, Scope.Project);
+
+    expect(runs).toEqual([["plugin", "install", "a@mp", "--scope", "project", "-y"]]);
+  });
+
+  it("returns the subset of plugin keys it actually installed", async () => {
+    await writeInstalledPlugins({ version: 2, plugins: {} });
+    await writeFile(
+      join(claudeHome, "plugins", "known_marketplaces.json"),
+      JSON.stringify({ mp: { source: { source: "github", repo: "owner/repo" } } }),
+      "utf8"
+    );
+
+    const installed = await build([]).ensureCached(["a@mp"], false);
+
+    expect(installed).toEqual(["a@mp"]);
+  });
+
+  describe("neutralizeUserScopeEnablement", () => {
+    it("runs 'claude plugin disable --scope user' for each given key", async () => {
+      const runs: string[][] = [];
+
+      await build(runs).neutralizeUserScopeEnablement(["a@mp", "b@mp"]);
+
+      expect(runs).toEqual([
+        ["plugin", "disable", "a@mp", "--scope", "user"],
+        ["plugin", "disable", "b@mp", "--scope", "user"],
+      ]);
+    });
+
+    it("warns rather than throwing when the disable shell-out fails", async () => {
+      const installer = new PluginCacheInstaller(
+        new KnownMarketplacesCache(paths),
+        new InstalledPluginsCache(paths),
+        new Logger(LogLevel.ERROR),
+        {},
+        async () => ({ ok: false, detail: "no network" })
+      );
+
+      await expect(installer.neutralizeUserScopeEnablement(["a@mp"])).resolves.toBeUndefined();
+    });
   });
 });

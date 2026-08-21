@@ -60,7 +60,8 @@ export class EnabledPluginsReporter {
     settingsPath: string,
     settings: ClaudeSettings,
     cwd: string,
-    dryRun: boolean
+    dryRun: boolean,
+    quiet = false
   ): Promise<EnabledPluginsReport> {
     const cached = await this.installedPluginsCache.keys();
     const uncachedPluginKeys = new Set<string>();
@@ -98,9 +99,11 @@ export class EnabledPluginsReporter {
       );
     }
 
-    this.logger.section();
-    const body = lines.length > 0 ? lines.join("\n") : "  (none)";
-    this.logger.info(`Enabled plugin(s):\n${body}`);
+    if (!quiet) {
+      this.logger.section();
+      const body = lines.length > 0 ? lines.join("\n") : "  (none)";
+      this.logger.info(`Enabled plugin(s):\n${body}`);
+    }
 
     return { uncachedPluginKeys: [...uncachedPluginKeys].sort(), effectivelyEnabledPluginKeys };
   }

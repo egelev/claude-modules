@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as tar from "tar";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -130,6 +130,23 @@ describe("export", () => {
     expect(result.stderr).not.toContain("machine-specific");
   });
 
+  it("warns for an unrecognized marketplace source shape too, rather than assuming it's portable", async () => {
+    // A source that isn't the double-nested {source:{source:...}} shape this tool produces itself —
+    // e.g. a hand-authored --source '<json>' — is neither known-portable nor known-non-portable, and
+    // must not be silently treated as safe just because it isn't recognized.
+    await h.writeModule("backend", {
+      enabledPlugins: { "a@odd-mp": true },
+      extraKnownMarketplaces: { "odd-mp": { nope: true } },
+      composedModules: [],
+    });
+
+    const result = await h.run(["export", "backend"], h.root);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("machine-specific");
+    expect(result.stderr).toContain("unrecognized");
+  });
+
   it("writes nothing under --dry-run but reports the closure", async () => {
     await h.run(["create", "base"]);
     await h.run(["create", "top", "--compose", "base"]);
@@ -144,6 +161,40 @@ describe("export", () => {
         .then(() => true)
         .catch(() => false)
     ).toBe(false);
+  });
+
+  it("cleans up its temp file after a successful export, leaving no .tmp sibling behind", async () => {
+    await h.run(["create", "backend"]);
+    const outPath = join(h.root, "backend.tar.gz");
+
+    const result = await h.run(["export", "backend", "--output", outPath], h.root);
+
+    expect(result.code).toBe(0);
+    const siblings = await readdir(h.root);
+    expect(siblings.filter((name) => name.includes(".tmp"))).toEqual([]);
+  });
+
+  it("overwrites a pre-existing file at --output with a valid archive, via temp-file-then-rename", async () => {
+    await h.run(["create", "backend"]);
+    const outPath = join(h.root, "backend.tar.gz");
+    await writeFile(outPath, "not a real archive", "utf8");
+
+    const result = await h.run(["export", "backend", "--output", outPath], h.root);
+
+    expect(result.code).toBe(0);
+    const extracted = await extract(outPath);
+    const manifest = JSON.parse(await readFile(join(extracted, "manifest.json"), "utf8"));
+    expect(manifest.rootModule).toBe("backend");
+  });
+
+  it("creates missing intermediate directories for --output", async () => {
+    await h.run(["create", "backend"]);
+    const outPath = join(h.root, "deep", "nested", "path", "backend.tar.gz");
+
+    const result = await h.run(["export", "backend", "--output", outPath], h.root);
+
+    expect(result.code).toBe(0);
+    expect((await stat(outPath)).isFile()).toBe(true);
   });
 
   it("errors on a nonexistent module", async () => {
