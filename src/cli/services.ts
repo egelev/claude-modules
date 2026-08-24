@@ -10,6 +10,7 @@ import { KnownMarketplacesCache } from "../core/KnownMarketplacesCache.js";
 import { InstalledPluginsCache } from "../core/InstalledPluginsCache.js";
 import { MarketplaceCacheInstaller } from "../core/MarketplaceCacheInstaller.js";
 import { PluginCacheInstaller } from "../core/PluginCacheInstaller.js";
+import { ModuleUpdater } from "../core/ModuleUpdater.js";
 import { SettingsRepository } from "../core/SettingsRepository.js";
 import { SettingsApplier } from "../core/SettingsApplier.js";
 import { ModuleListFile } from "../core/ModuleListFile.js";
@@ -33,6 +34,7 @@ export interface CliServices {
   installedPluginsCache: InstalledPluginsCache;
   marketplaceCacheInstaller: MarketplaceCacheInstaller;
   pluginCacheInstaller: PluginCacheInstaller;
+  moduleUpdater: ModuleUpdater;
   settingsRepository: SettingsRepository;
   settingsApplier: SettingsApplier;
   moduleListFile: ModuleListFile;
@@ -59,6 +61,7 @@ export function buildServices(env: NodeJS.ProcessEnv, logger: Logger): CliServic
   const installedPluginsCache = new InstalledPluginsCache(paths);
   const marketplaceCacheInstaller = new MarketplaceCacheInstaller(knownMarketplacesCache, logger, env);
   const pluginCacheInstaller = new PluginCacheInstaller(knownMarketplacesCache, installedPluginsCache, logger, env);
+  const moduleUpdater = new ModuleUpdater(logger, env);
   const settingsRepository = new SettingsRepository();
   const settingsApplier = new SettingsApplier(logger);
   const moduleListFile = new ModuleListFile(paths, repoLocator);
@@ -97,6 +100,7 @@ export function buildServices(env: NodeJS.ProcessEnv, logger: Logger): CliServic
     installedPluginsCache,
     marketplaceCacheInstaller,
     pluginCacheInstaller,
+    moduleUpdater,
     settingsRepository,
     settingsApplier,
     moduleListFile,

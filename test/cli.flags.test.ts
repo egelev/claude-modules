@@ -28,6 +28,7 @@ const COMMANDS: { name: string; argv: string[] }[] = [
   { name: "disable", argv: ["disable", "demo"] },
   { name: "disable-all", argv: ["disable-all"] },
   { name: "reload", argv: ["reload"] },
+  { name: "update", argv: ["update", "demo"] },
   { name: "status", argv: ["status"] },
 ];
 

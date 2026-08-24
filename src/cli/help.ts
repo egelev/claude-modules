@@ -53,6 +53,12 @@ Commands:
     [--install]                           Also attempt to add any marketplace, and install any
                                            plugin, Claude Code doesn't already know about (off by
                                            default)
+  update [module...]                      Update modules' marketplaces then plugins to their latest
+                                           versions, delegating to 'claude plugin marketplace
+                                           update'/'claude plugin update'. No module name(s): update
+                                           the scope's currently active (saved) modules instead
+    [--scope user|project|local]          Module-list scope when no names are given, and the
+                                           --scope passed to 'claude plugin update' (default: local)
   status                                  Audit a scope's enabled plugins against Claude Code's cache
                                            and, if that scope has a module list, against it too
     [--scope user|project|local]          Which settings.json to read (default: local)
@@ -60,7 +66,7 @@ Commands:
     [--json]                              Print one JSON object to stdout instead of the
                                            human-readable report (exit code unchanged)
 
-Scopes (used by --scope in 'enable', 'disable', 'disable-all', 'reload', and 'status'):
+Scopes (used by --scope in 'enable', 'disable', 'disable-all', 'reload', 'update', and 'status'):
   user     ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR/settings.json, if set)
   project  <repo_root>/.claude/settings.json
   local    <repo_root>/.claude/settings.local.json (default), or <cwd>/.claude/settings.local.json
@@ -75,7 +81,8 @@ Global options:
   --dry-run    Preview a mutating command's effect without writing anything or running external
                commands (no-op on 'list'/'info'/'status', which never write). Supported by:
                create, remove, export, import, plugin install, plugin uninstall, marketplace add,
-               marketplace remove, compose add, compose remove, enable, disable, disable-all, reload.
+               marketplace remove, compose add, compose remove, enable, disable, disable-all, reload,
+               update.
 
 Run 'claude-modules <command> --help' for a command's full options and examples.
 `;
@@ -604,6 +611,61 @@ Examples:
   claude-modules reload --file ./config/team-modules.list
   claude-modules reload --install
   claude-modules reload --dry-run
+`,
+
+  update: `Usage: claude-modules update [module...] [--scope user|project|local] [--dry-run]
+
+Resolve the union of enabled plugins and known marketplaces across the given
+modules (transitively, same as 'enable' — see 'enable --help') and ask Claude
+Code itself to update each one to its latest version, by shelling out to:
+  1. 'claude plugin marketplace update <name>', one per union marketplace
+     (always first, so a plugin whose marketplace just moved still gets a
+     chance at a fresh update in the same run)
+  2. 'claude plugin update <plugin> --scope <scope> -y', one per union plugin
+
+Unlike 'enable'/'disable'/'reload', this never writes any module's own
+settings.json or any scope's settings.json — it doesn't change what's
+enabled, only what version of it Claude Code has installed.
+
+With no module name given, updates whatever modules are currently active for
+--scope instead: the same saved list 'status --scope <same>'/'reload --scope
+<same>' would read (see 'reload --help' for how that list is found). Errors
+if that scope has no saved list — pass module name(s) directly, or run
+'enable <module...> --scope <same> --save' first.
+
+--scope defaults to 'local', like every other scope-taking command here — but
+note it means something slightly different for each of the two 'claude'
+subcommands this drives: 'claude plugin marketplace update' takes no --scope
+at all (marketplaces aren't scoped), and 'claude plugin update' itself
+defaults to 'user' when run directly. If your plugins actually live at user
+scope (the common case for something installed once and shared across
+repos), pass --scope user explicitly.
+
+Best-effort per item, like 'enable --install': a single marketplace or plugin
+failing to update (network error, nothing installed at that scope, ...) is
+logged as a warning and does not stop the rest of the run. If anything failed
+and this wasn't a --dry-run, 'update' exits with code 2 afterward — same
+contract as 'enable --install' and 'status'.
+
+An already-open Claude Code session does not pick up an updated plugin's new
+code automatically — 'claude plugin update' itself notes "restart required to
+apply" — so restart it (or start a new one) after updating, distinct from the
+'/reload-plugins' hint 'enable'/'disable'/'reload' print for enabledPlugins
+changes.
+
+Options:
+  --scope user|project|local   Module-list scope when no module name(s) are
+                                given, and the --scope passed to every
+                                'claude plugin update' call (default: local)
+  --dry-run                    Report every 'claude plugin marketplace
+                                update'/'claude plugin update' command that
+                                would run, without running any of them
+
+Examples:
+  claude-modules update backend-dev
+  claude-modules update backend-dev frontend-dev
+  claude-modules update --scope user
+  claude-modules update backend-dev --dry-run
 `,
 
   status: `Usage: claude-modules status [--scope user|project|local] [--verify] [--json]

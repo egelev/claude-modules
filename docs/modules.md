@@ -92,13 +92,19 @@ New modules always start at version `1.0.0`, however much they're seeded with.
 
 ### `--from-scope`
 
-Usually where you want to start. Seeding from a repo that's already configured the way you like
-beats re-typing every `<plugin>@<marketplace>` through `plugin install`:
+A shortcut for capturing a scope you've already configured by hand, or through `/plugin`, without
+re-typing every `<plugin>@<marketplace>` through `plugin install`:
 
 ```bash
 cd ~/projects/api-service
 claude-modules create backend --from-scope local
 ```
+
+It's a shortcut, not the recommended way to build a module: a scope tends to accumulate plugins for
+whatever you were doing at the time, so seeding from it can just as easily capture a bundle that
+mixes unrelated concerns (backend and frontend plugins together, say) as it can a clean one. Building
+a module deliberately, one `plugin install` at a time, keeps it scoped to a single concern and easier
+to compose later — see the [example workflow](../README.md#example-workflow) in the README.
 
 Only plugins actually enabled (`true`) there are captured. An explicit `false` is an *override* —
 that's how [`enable --only`](applying.md#enable) suppresses a plugin inherited from a broader scope

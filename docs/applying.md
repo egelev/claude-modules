@@ -1,6 +1,6 @@
 # Applying modules to a scope
 
-`enable` · `disable` · `disable-all` · `reload`
+`enable` · `disable` · `disable-all` · `reload` · `update`
 
 These are the commands that write Claude Code's own `settings.json`. For which file each scope maps
 to, see [Concepts → Scopes](concepts.md#scopes).
@@ -221,6 +221,51 @@ from.
 > **Behavior change.** `reload` used to attempt the caching step unconditionally, with no way to
 > turn it off. It now defaults to **off** and only attempts it when `--install` is passed, for
 > symmetry with `enable`. If you relied on `reload` silently re-caching plugins, add `--install`.
+
+---
+
+## `update`
+
+```bash
+claude-modules update [module...] [--scope user|project|local] [--dry-run]
+```
+
+Resolves the union of enabled plugins and known marketplaces across the given modules — the same
+transitive [composition](concepts.md#composition) `enable`/`disable`/`reload` compute — and asks
+Claude Code itself to bring each one up to date, marketplaces first:
+
+1. `claude plugin marketplace update <name>`, one per union marketplace
+2. `claude plugin update <plugin> --scope <scope> -y`, one per union plugin
+
+```bash
+claude-modules update backend-dev
+claude-modules update backend-dev frontend-dev
+claude-modules update --scope user
+```
+
+Unlike every other command on this page, `update` **never writes a settings.json** — a module's own
+file or any scope's. It doesn't change what's enabled, only what version of it Claude Code has
+installed.
+
+With no module name given, it updates whatever modules are currently active for `--scope` instead —
+the same saved list [`reload`](#reload) would read back. It errors if that scope has no saved list.
+
+`--scope` defaults to `local`, like every other scope-taking command here, and serves two purposes:
+which scope's saved module list to read (when no name is given), and the `--scope` passed to every
+`claude plugin update` call. Note it means something different for each `claude` subcommand this
+drives: `claude plugin marketplace update` takes no `--scope` at all, and `claude plugin update`
+itself defaults to `user` when run directly — so if your plugins actually live at `user` scope (the
+common case for something installed once and shared across repos), pass `--scope user` explicitly.
+
+Best-effort per item, like [`enable --install`](#--install): one marketplace or plugin failing to
+update (network error, nothing installed at that scope, ...) is logged as a warning and doesn't stop
+the rest of the run. If anything failed and this wasn't a `--dry-run`, `update` **exits with code
+2** afterward — same contract as `enable --install` and `status`.
+
+An already-open Claude Code session doesn't pick up an updated plugin's new code on its own —
+`claude plugin update` itself notes "restart required to apply" — so restart the session (or start a
+new one) afterward. This is distinct from the `/reload-plugins` hint above, which is about
+`enabledPlugins` changes, not plugin *version* changes.
 
 ---
 

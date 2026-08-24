@@ -4,22 +4,12 @@
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
+
 <!-- Add once published: [![npm](https://img.shields.io/npm/v/claude-modules)](https://www.npmjs.com/package/claude-modules) -->
-
-Claude Code enables plugins one at a time, per scope, across three separate `settings.json` files.
-`claude-modules` lets you bundle them into named **modules** — `backend`, `frontend`, `fullstack` —
-and switch between them with a single command.
-
-```bash
-claude-modules create backend --from-scope local                      # capture a setup you already have
-claude-modules create fullstack --compose backend --compose frontend  # compose modules into bigger ones
-claude-modules enable fullstack --scope project --save                # apply it, and remember you did
-claude-modules export fullstack                                       # hand it to a teammate
-```
 
 Every module is:
 
-- **Self-sufficient** — it carries its plugins *and* the marketplaces they come from, so it works on
+- **Self-sufficient** — it carries its plugins _and_ the marketplaces they come from, so it works on
   a machine that's never seen them.
 - **Composable** — `fullstack` = `backend` + `frontend`, declared once and resolved every time, not
   retyped.
@@ -29,17 +19,84 @@ Every module is:
 
 ---
 
+## Example workflow
+
+Claude Code enables plugins one at a time, per scope, across three separate `settings.json` files.
+`claude-modules` lets you bundle them into named modules and switch between them with a single
+command. Build modules plugin by plugin, then compose them into the role you actually switch into:
+
+```bash
+# A base layer every stack builds on
+claude-modules create base-dev
+claude-modules plugin install base-dev context7@claude-plugins-official
+claude-modules plugin install base-dev code-simplifier@claude-plugins-official
+
+# A Quarkus-specific module
+claude-modules create quarkus
+claude-modules plugin install quarkus jdtls-lsp@claude-plugins-official
+claude-modules plugin install quarkus quarkus-agent@claude-plugins-official
+
+# A frontend-specific module
+claude-modules create fe
+claude-modules plugin install fe modern-web-guidance@claude-plugins-official
+claude-modules plugin install fe playwright@claude-plugins-official
+claude-modules plugin install fe typescript-lsp@claude-plugins-official
+claude-modules plugin install fe frontend-design@claude-plugins-official
+
+# Compose them into one role, declared once
+claude-modules create full-dev --compose base-dev --compose quarkus --compose fe
+claude-modules enable full-dev --scope project --save   # transitively pulls in all three, every time
+```
+
+> **Already have a repo configured the way you like** — by hand, or through `/plugin`? `create
+> <module> --from-scope <scope>` captures it in one shot instead of typing every `plugin install`.
+> See [Quick start](#quick-start) below.
+
+Don't need `full-dev` as a permanent unit? Name the modules directly on one `enable` call instead —
+that's an ad-hoc union, good for one-off combinations you won't reuse:
+
+```bash
+claude-modules enable base-dev quarkus fe --save
+```
+
+And when you're switching roles rather than layering on top of what's active, add `--only` to make
+the scope _exactly_ the given modules instead of adding to it:
+
+```bash
+claude-modules enable full-dev --scope user --only --save
+claude-modules enable base-dev --scope user --only          # Monday: quarkus/fe plugins go quiet
+```
+
+Later, after a module's plugin list changes: `claude-modules reload --scope project`.
+
+Modules aren't limited to coding roles, either — anything you switch _into_ works the same way.
+Register the marketplace it needs, build the module, and enable it exclusively so it's the only
+thing active, unrelated dev modules included:
+
+```bash
+claude-modules marketplace add anthropics/financial-services-plugins --name claude-for-financial-services
+
+claude-modules create investing
+claude-modules plugin install investing wealth-management@claude-for-financial-services
+claude-modules plugin install investing private-equity@claude-for-financial-services
+claude-modules plugin install investing investment-banking@claude-for-financial-services
+
+claude-modules enable investing --scope user --only --save   # only investing is active now
+```
+
+---
+
 ## Why not just use `/plugin`?
 
-|  | Claude Code `/plugin` | `claude-modules` |
-|---|---|---|
-| Unit of work | one plugin at a time | a named bundle of plugins |
-| Grouping | none — `enabledPlugins` is a flat map | modules, which compose into bigger modules |
-| Reuse across repos | re-enable each plugin, per repo | `enable backend` |
-| Another machine | re-add marketplaces, re-enable plugins | `export` → `import`, one file |
-| Switching roles | hand-edit up to three `settings.json` files | `enable backend --only` |
-| Auditing what's on | read three files and apply precedence in your head | `status` — exit-coded, `--json` |
-| Sharing with a team | commit `.claude/settings.json` wholesale | commit `.claude-modules`, then `reload` |
+|                     | Claude Code `/plugin`                              | `claude-modules`                           |
+| ------------------- | -------------------------------------------------- | ------------------------------------------ |
+| Unit of work        | one plugin at a time                               | a named bundle of plugins                  |
+| Grouping            | none — `enabledPlugins` is a flat map              | modules, which compose into bigger modules |
+| Reuse across repos  | re-enable each plugin, per repo                    | `enable backend`                           |
+| Another machine     | re-add marketplaces, re-enable plugins             | `export` → `import`, one file              |
+| Switching roles     | hand-edit up to three `settings.json` files        | `enable backend --only`                    |
+| Auditing what's on  | read three files and apply precedence in your head | `status` — exit-coded, `--json`            |
+| Sharing with a team | commit `.claude/settings.json` wholesale           | commit `.claude-modules`, then `reload`    |
 
 There's a secondary benefit too: every enabled plugin adds tools Claude has to choose between on
 every turn, and [Claude's own docs](https://code.claude.com/docs/en/agent-sdk/tool-search) note that
@@ -69,10 +126,10 @@ npm link          # puts `claude-modules` on your PATH
 
 ### Configuration
 
-| Variable | Default | What it points at |
-|---|---|---|
-| `CLAUDE_MODULES_HOME` | `~/.claude-modules` | Where your modules and the marketplace registry live |
-| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's own home — read for the `user` scope and its plugin caches |
+| Variable              | Default             | What it points at                                                        |
+| --------------------- | ------------------- | ------------------------------------------------------------------------ |
+| `CLAUDE_MODULES_HOME` | `~/.claude-modules` | Where your modules and the marketplace registry live                     |
+| `CLAUDE_CONFIG_DIR`   | `~/.claude`         | Claude Code's own home — read for the `user` scope and its plugin caches |
 
 ---
 
@@ -140,7 +197,7 @@ own, so `claude-modules` tells you, and `--install` fixes it.
 From here, `claude-modules status` audits the result at any time, and exits non-zero if something
 has drifted — see [the docs](docs/status.md#status).
 
-> **Changes apply to the *next* session.** Claude Code reads `enabledPlugins` at session start, so
+> **Changes apply to the _next_ session.** Claude Code reads `enabledPlugins` at session start, so
 > these commands have no effect on a session that's already open — which looks exactly like the
 > command having done nothing. Run `/reload-plugins` in that session (add `--force` if it warns
 > about the prompt cache), or start a new one. Every command that changes what's enabled reminds you
@@ -168,11 +225,11 @@ A **module** is a directory under `$CLAUDE_MODULES_HOME/modules/<name>/` holding
 
 **Scopes** are the same three Claude Code uses, resolved with `local > project > user`:
 
-| Scope | File | Needs a git repo? |
-|---|---|---|
-| `user` | `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`) | no |
-| `project` | `<repo_root>/.claude/settings.json` | **yes** |
-| `local` | `<repo_root>/.claude/settings.local.json`, or `<cwd>/...` outside a repo | no |
+| Scope     | File                                                                     | Needs a git repo? |
+| --------- | ------------------------------------------------------------------------ | ----------------- |
+| `user`    | `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR/settings.json`)        | no                |
+| `project` | `<repo_root>/.claude/settings.json`                                      | **yes**           |
+| `local`   | `<repo_root>/.claude/settings.local.json`, or `<cwd>/...` outside a repo | no                |
 
 `--scope` defaults to `local`.
 
@@ -184,87 +241,56 @@ in transitively by every future command. Both are covered in
 **Module lists** remember which modules you applied, so `reload` can reapply them and `status` can
 detect drift. One per scope:
 
-| Scope | Module list | |
-|---|---|---|
-| `user` | `$CLAUDE_MODULES_HOME/user.modules` | global |
-| `project` | `<repo_root>/.claude-modules` | **commit it** — shared with the team |
-| `local` | `<repo_root>/.claude-modules.local` | **gitignore it** — personal to your checkout |
+| Scope     | Module list                         |                                              |
+| --------- | ----------------------------------- | -------------------------------------------- |
+| `user`    | `$CLAUDE_MODULES_HOME/user.modules` | global                                       |
+| `project` | `<repo_root>/.claude-modules`       | **commit it** — shared with the team         |
+| `local`   | `<repo_root>/.claude-modules.local` | **gitignore it** — personal to your checkout |
 
 ---
 
 ## Commands
 
-| Command | What it does | |
-|---|---|---|
-| `list` | List every module with its plugin and marketplace counts | [docs](docs/modules.md#list) |
-| `info <module>` | Show one module's plugins, marketplaces, and composition | [docs](docs/modules.md#info) |
-| `create <module>` | Create a module — empty, seeded from a scope, or composing others | [docs](docs/modules.md#create) |
-| `remove <module>` | Delete a module | [docs](docs/modules.md#remove) |
-| `compose add <module> <composed...>` | Make a module build on others | [docs](docs/compose.md#compose-add) |
-| `compose remove <module> <composed...>` | Stop building on others | [docs](docs/compose.md#compose-remove) |
-| `plugin install <module> <plugin>@<mp>` | Enable a plugin inside a module | [docs](docs/plugins.md#plugin-install) |
-| `plugin uninstall <module> <plugin>@<mp>` | Disable a plugin inside a module | [docs](docs/plugins.md#plugin-uninstall) |
-| `marketplace add <spec>` | Register a marketplace, globally or on a module | [docs](docs/marketplaces.md#marketplace-add) |
-| `marketplace remove <name>` | Unregister a marketplace | [docs](docs/marketplaces.md#marketplace-remove) |
-| `marketplace list` | List registered marketplaces | [docs](docs/marketplaces.md#marketplace-list) |
-| `enable <module...>` | Apply modules to a scope | [docs](docs/applying.md#enable) |
-| `disable <module...>` | Turn a scope's copy of those plugins off | [docs](docs/applying.md#disable) |
-| `disable-all` | Turn every plugin in a scope off | [docs](docs/applying.md#disable-all) |
-| `reload` | Re-apply a scope's saved module list | [docs](docs/applying.md#reload) |
-| `status` | Audit a scope; exit-coded for CI | [docs](docs/status.md#status) |
-| `export <module>` | Pack a module and its composition chain into a `.tar.gz` | [docs](docs/transfer.md#export) |
-| `import <archive>` | Unpack one on another machine | [docs](docs/transfer.md#import) |
+| Command                                   | What it does                                                       |                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
+| `list`                                    | List every module with its plugin and marketplace counts           | [docs](docs/modules.md#list)                    |
+| `info <module>`                           | Show one module's plugins, marketplaces, and composition           | [docs](docs/modules.md#info)                    |
+| `create <module>`                         | Create a module — empty, seeded from a scope, or composing others  | [docs](docs/modules.md#create)                  |
+| `remove <module>`                         | Delete a module                                                    | [docs](docs/modules.md#remove)                  |
+| `compose add <module> <composed...>`      | Make a module build on others                                      | [docs](docs/compose.md#compose-add)             |
+| `compose remove <module> <composed...>`   | Stop building on others                                            | [docs](docs/compose.md#compose-remove)          |
+| `plugin install <module> <plugin>@<mp>`   | Enable a plugin inside a module                                    | [docs](docs/plugins.md#plugin-install)          |
+| `plugin uninstall <module> <plugin>@<mp>` | Disable a plugin inside a module                                   | [docs](docs/plugins.md#plugin-uninstall)        |
+| `marketplace add <spec>`                  | Register a marketplace, globally or on a module                    | [docs](docs/marketplaces.md#marketplace-add)    |
+| `marketplace remove <name>`               | Unregister a marketplace                                           | [docs](docs/marketplaces.md#marketplace-remove) |
+| `marketplace list`                        | List registered marketplaces                                       | [docs](docs/marketplaces.md#marketplace-list)   |
+| `enable <module...>`                      | Apply modules to a scope                                           | [docs](docs/applying.md#enable)                 |
+| `disable <module...>`                     | Turn a scope's copy of those plugins off                           | [docs](docs/applying.md#disable)                |
+| `disable-all`                             | Turn every plugin in a scope off                                   | [docs](docs/applying.md#disable-all)            |
+| `reload`                                  | Re-apply a scope's saved module list                               | [docs](docs/applying.md#reload)                 |
+| `update [module...]`                      | Update modules' marketplaces then plugins to their latest versions | [docs](docs/applying.md#update)                 |
+| `status`                                  | Audit a scope; exit-coded for CI                                   | [docs](docs/status.md#status)                   |
+| `export <module>`                         | Pack a module and its composition chain into a `.tar.gz`           | [docs](docs/transfer.md#export)                 |
+| `import <archive>`                        | Unpack one on another machine                                      | [docs](docs/transfer.md#import)                 |
 
 ### Global options
 
-| Flag | Effect |
-|---|---|
-| `-h`, `--help` | Show help. Works after any command: `claude-modules plugin install --help` |
-| `-v`, `--version` | Print the installed version |
-| `--verbose` | Enable debug logging |
-| `--dry-run` | Preview a mutating command's effect — writes nothing, runs no external commands |
+| Flag              | Effect                                                                          |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `-h`, `--help`    | Show help. Works after any command: `claude-modules plugin install --help`      |
+| `-v`, `--version` | Print the installed version                                                     |
+| `--verbose`       | Enable debug logging                                                            |
+| `--dry-run`       | Preview a mutating command's effect — writes nothing, runs no external commands |
 
-`--dry-run` is supported by all 14 mutating commands, and is a no-op on the four that never write
+`--dry-run` is supported by all 15 mutating commands, and is a no-op on the four that never write
 (`list`, `info`, `status`, `marketplace list`). Running a bare group name — `claude-modules plugin`,
 `marketplace`, or `compose` — prints that group's usage.
 
 ---
 
-## Example workflow
-
-```bash
-# Working in a repo as a backend dev today
-claude-modules enable backend --scope project --save
-
-# Full-stack repo? Ad-hoc union — name several modules on one call
-cd ~/projects/web-app
-claude-modules enable backend frontend shared-tools --save
-
-# Want that combination to be permanent instead of retyped? Declare it once
-claude-modules create fullstack --compose backend --compose frontend --compose shared-tools
-claude-modules enable fullstack --save     # transitively pulls in all three, every time
-
-# Later, after a module's plugin list changed
-claude-modules reload --scope project
-```
-
-Modules don't have to be tied to a repository. A set of plugins you switch *into* — a weekend
-research mode, say — lives at `user` scope. Plain `enable` **adds** to whatever's already active, so
-an exclusive switch reaches for `--only`:
-
-```bash
-claude-modules enable investing --scope user --only --save
-claude-modules enable backend --scope user --only          # Monday: investing plugins go quiet
-```
-
-Drop `--only` and the same command layers instead of switching — the right call when you're stacking
-capabilities rather than trading between them.
-
----
-
 ## Known limitations
 
-- **No token-cost preview.** Modules report plugin *counts*, not tokens. Claude Code knows the
+- **No token-cost preview.** Modules report plugin _counts_, not tokens. Claude Code knows the
   number but offers no way to aggregate it per module yet. → [details](docs/concepts.md#no-token-cost-preview)
 - **No version pinning.** A module records which plugins to enable, not which versions. Treat
   modules as portable role definitions, not lockfiles. → [details](docs/transfer.md#plugin-versions)

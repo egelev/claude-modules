@@ -19,6 +19,7 @@ import { DisableCommand } from "./commands/DisableCommand.js";
 import { DisableAllCommand } from "./commands/DisableAllCommand.js";
 import { ReloadCommand } from "./commands/ReloadCommand.js";
 import { StatusCommand } from "./commands/StatusCommand.js";
+import { UpdateCommand } from "./commands/UpdateCommand.js";
 import { ExportModuleCommand } from "./commands/ExportModuleCommand.js";
 import { ImportModuleCommand } from "./commands/ImportModuleCommand.js";
 import { Logger, LogLevel } from "../util/Logger.js";
@@ -109,6 +110,7 @@ export const MUTATING_COMMANDS = new Set([
   "disable",
   "disable-all",
   "reload",
+  "update",
 ]);
 
 /**
@@ -198,10 +200,12 @@ export class Cli {
     const {
       moduleStore,
       compositionResolver,
+      moduleResolver,
       moduleArchiver,
       marketplaceRegistry,
       knownMarketplacesCache,
       pluginCacheInstaller,
+      moduleUpdater,
       moduleListFile,
       scopeResolver,
       settingsRepository,
@@ -493,6 +497,28 @@ export class Cli {
           dryRun,
           values.install ?? false,
           values.file
+        );
+      }
+
+      case "update": {
+        const { values, positionals } = parseArgs({
+          args: rest,
+          options: {
+            scope: { type: "string" },
+            ...HELP_OPTION,
+          },
+          allowPositionals: true,
+        });
+        const scope = parseScope(values.scope);
+        return new UpdateCommand(
+          positionals,
+          scope,
+          this.cwd,
+          moduleResolver,
+          moduleListFile,
+          moduleUpdater,
+          logger,
+          dryRun
         );
       }
 
