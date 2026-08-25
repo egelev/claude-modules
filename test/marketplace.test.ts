@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Harness, githubSource } from "./helpers/harness.js";
+import { AddMarketplaceCommand } from "../src/cli/commands/AddMarketplaceCommand.js";
+import { MarketplaceRegistry } from "../src/core/MarketplaceRegistry.js";
+import { ModuleStore } from "../src/core/ModuleStore.js";
+import { KnownMarketplacesCache } from "../src/core/KnownMarketplacesCache.js";
+import { MarketplaceCacheInstaller } from "../src/core/MarketplaceCacheInstaller.js";
+import { ClaudeRunResult } from "../src/core/ClaudeRunner.js";
+import { Paths } from "../src/util/Paths.js";
+import { Logger, LogLevel } from "../src/util/Logger.js";
 
 describe("marketplace add/remove (global registry, no --module)", () => {
   let h: Harness;
@@ -368,5 +376,86 @@ describe("marketplace list", () => {
 
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("ghost");
+  });
+});
+
+describe("marketplace add syncs the marketplace to Claude Code", () => {
+  // Regression coverage for the "isn't cached ... Run 'claude plugin marketplace add'" warning:
+  // registering a marketplace here must also reach MarketplaceCacheInstaller, so a later `plugin
+  // install` never finds it missing from Claude Code's own known_marketplaces.json. Harness/Cli
+  // always wire up the real defaultClaudeRunner (no real `claude` binary in this suite), so this
+  // constructs AddMarketplaceCommand directly with a fake ClaudeRunner, the same seam
+  // test/pluginInstallUninstall.test.ts's "cache-warming" block and test/marketplaceCache.test.ts use.
+  let h: Harness;
+  let paths: Paths;
+  let runs: string[][];
+
+  function build(moduleName?: string, sourceJson?: string, dryRun = false): AddMarketplaceCommand {
+    const logger = new Logger(LogLevel.ERROR);
+    const result: ClaudeRunResult = { ok: true, stdout: "" };
+    const runClaude = async (args: string[]) => {
+      runs.push(args);
+      return result;
+    };
+    const knownMarketplacesCache = new KnownMarketplacesCache(paths);
+    const marketplaceCacheInstaller = new MarketplaceCacheInstaller(knownMarketplacesCache, logger, {}, runClaude);
+    return new AddMarketplaceCommand(
+      "owner/repo",
+      "mp",
+      sourceJson,
+      moduleName,
+      new MarketplaceRegistry(paths),
+      new ModuleStore(paths),
+      marketplaceCacheInstaller,
+      logger,
+      dryRun
+    );
+  }
+
+  beforeEach(async () => {
+    h = await Harness.create();
+    paths = new Paths(h.env);
+    runs = [];
+  });
+
+  afterEach(async () => {
+    await h.cleanup();
+  });
+
+  it("runs 'claude plugin marketplace add' for a marketplace Claude Code doesn't know about yet", async () => {
+    await build().execute();
+
+    expect(runs).toEqual([["plugin", "marketplace", "add", "owner/repo", "--scope", "user"]]);
+  });
+
+  it("skips the call when the marketplace is already known to Claude Code", async () => {
+    await h.writeKnownMarketplaces({ mp: githubSource("owner/repo") });
+
+    await build().execute();
+
+    expect(runs).toEqual([]);
+  });
+
+  it("does not attempt a subprocess call under --dry-run", async () => {
+    // Only proves absence of a real `claude` invocation, not that the dry-run preview line was
+    // printed (this Logger is set to ERROR, and nothing here captures stdout) — the preview text
+    // itself is covered at the MarketplaceCacheInstaller level in marketplaceCache.test.ts.
+    await build(undefined, undefined, true).execute();
+
+    expect(runs).toEqual([]);
+  });
+
+  it("does the same when registering onto a module with --module", async () => {
+    await h.writeModule("demo", { enabledPlugins: {}, extraKnownMarketplaces: {}, composedModules: [] });
+
+    await build("demo").execute();
+
+    expect(runs).toEqual([["plugin", "marketplace", "add", "owner/repo", "--scope", "user"]]);
+  });
+
+  it("also syncs when an explicit --source JSON is given", async () => {
+    await build(undefined, JSON.stringify(githubSource("owner/repo"))).execute();
+
+    expect(runs).toEqual([["plugin", "marketplace", "add", "owner/repo", "--scope", "user"]]);
   });
 });

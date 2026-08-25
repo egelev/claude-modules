@@ -26,7 +26,9 @@ Bumps the module's **patch** version.
 
 If the plugin's marketplace isn't already known to the module, its source is resolved in this order:
 
-1. an explicit `--source '<json>'` on this call — stored on this module only
+1. an explicit `--source '<json>'` on this call — stored on this module, **and** also registered
+   with Claude Code directly (`claude plugin marketplace add`, best-effort, same semantics as
+   [cache warming](#cache-warming) below) if it isn't already in `known_marketplaces.json`
 2. the [global marketplace registry](concepts.md#the-marketplace-registry)
 3. Claude Code's own local `known_marketplaces.json` cache — so if you've already added the
    marketplace via `/plugin` inside Claude Code, this picks it up automatically

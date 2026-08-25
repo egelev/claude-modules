@@ -204,6 +204,7 @@ export class Cli {
       moduleArchiver,
       marketplaceRegistry,
       knownMarketplacesCache,
+      marketplaceCacheInstaller,
       pluginCacheInstaller,
       moduleUpdater,
       moduleListFile,
@@ -309,6 +310,7 @@ export class Cli {
           moduleStore,
           marketplaceRegistry,
           knownMarketplacesCache,
+          marketplaceCacheInstaller,
           pluginCacheInstaller,
           logger,
           dryRun
@@ -353,6 +355,7 @@ export class Cli {
           values.module,
           marketplaceRegistry,
           moduleStore,
+          marketplaceCacheInstaller,
           logger,
           dryRun
         );

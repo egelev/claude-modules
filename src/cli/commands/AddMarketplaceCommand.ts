@@ -2,6 +2,7 @@ import pc from "picocolors";
 import { Command } from "./Command.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
+import { MarketplaceCacheInstaller } from "../../core/MarketplaceCacheInstaller.js";
 import { classifyMarketplaceSource, parseMarketplaceSpec } from "../../core/marketplaceSpec.js";
 import { bumpPatch } from "../../core/semver.js";
 import { Logger } from "../../util/Logger.js";
@@ -16,6 +17,7 @@ export class AddMarketplaceCommand implements Command {
     private readonly moduleName: string | undefined,
     private readonly marketplaceRegistry: MarketplaceRegistry,
     private readonly moduleStore: ModuleStore,
+    private readonly marketplaceCacheInstaller: MarketplaceCacheInstaller,
     private readonly logger: Logger,
     private readonly dryRun: boolean
   ) {}
@@ -37,6 +39,7 @@ export class AddMarketplaceCommand implements Command {
         await this.register(name, source);
         this.logger.info(`Registered marketplace '${pc.bold(name)}' with an explicit --source in ${target}.`);
       }
+      await this.marketplaceCacheInstaller.ensureCached({ [name]: source }, this.dryRun);
       return;
     }
 
@@ -58,6 +61,7 @@ export class AddMarketplaceCommand implements Command {
       await this.register(name, source);
       this.logger.info(`Registered marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}' in ${target}.`);
     }
+    await this.marketplaceCacheInstaller.ensureCached({ [name]: source }, this.dryRun);
     if (classifyMarketplaceSource(source) !== "github") {
       this.logger.section();
       this.logger.warn(

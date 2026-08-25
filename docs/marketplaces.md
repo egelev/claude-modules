@@ -37,6 +37,15 @@ claude-modules marketplace add anthropics/claude-plugins --module backend
 With `--module`, bumps that module's **patch** version. Without it, only the global registry
 changes and no module's version is touched.
 
+### Syncing to Claude Code
+
+If the marketplace isn't already known to Claude Code
+(`$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json`), this also runs `claude plugin marketplace
+add <spec> --scope user` on your behalf — the same best-effort cache-warming
+[`plugin install`](plugins.md#cache-warming) already does for plugins. A freshly-added marketplace
+is logged explicitly; a failure (no `claude` on `PATH`, no network) is a **warning, not a hard
+error** — the registry write above still succeeds either way.
+
 ### Spec detection
 
 | Spec form | Detected as |

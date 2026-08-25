@@ -3,6 +3,7 @@ import { Command } from "./Command.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { KnownMarketplacesCache } from "../../core/KnownMarketplacesCache.js";
+import { MarketplaceCacheInstaller } from "../../core/MarketplaceCacheInstaller.js";
 import { PluginCacheInstaller } from "../../core/PluginCacheInstaller.js";
 import { parsePluginKey } from "../../core/pluginKey.js";
 import { bumpPatch } from "../../core/semver.js";
@@ -18,6 +19,7 @@ export class InstallCommand implements Command {
     private readonly moduleStore: ModuleStore,
     private readonly marketplaceRegistry: MarketplaceRegistry,
     private readonly knownMarketplacesCache: KnownMarketplacesCache,
+    private readonly marketplaceCacheInstaller: MarketplaceCacheInstaller,
     private readonly pluginCacheInstaller: PluginCacheInstaller,
     private readonly logger: Logger,
     private readonly dryRun: boolean
@@ -27,17 +29,27 @@ export class InstallCommand implements Command {
     const { full, marketplace } = parsePluginKey(this.pluginKey);
     const module = await this.moduleStore.load(this.moduleName);
 
+    // --source is handled before the already-enabled check below: it signals explicit intent to
+    // (re-)establish this marketplace with Claude Code, which must not be silently dropped just
+    // because the plugin itself was already marked enabled by an earlier, only-partially-successful
+    // install (e.g. one that hit the "not cached" warning this call is meant to repair).
+    let explicitSource: unknown;
+    if (this.sourceJson !== undefined) {
+      try {
+        explicitSource = JSON.parse(this.sourceJson);
+      } catch (err) {
+        throw new InvalidJsonError("--source", err);
+      }
+      await this.marketplaceCacheInstaller.ensureCached({ [marketplace]: explicitSource }, this.dryRun);
+    }
+
     if (module.enabledPlugins[full] === true) {
       this.logger.warn(`'${pc.bold(full)}' is already enabled in module '${pc.bold(this.moduleName)}'; nothing to do.`);
       return;
     }
 
-    if (this.sourceJson !== undefined) {
-      try {
-        module.extraKnownMarketplaces[marketplace] = JSON.parse(this.sourceJson);
-      } catch (err) {
-        throw new InvalidJsonError("--source", err);
-      }
+    if (explicitSource !== undefined) {
+      module.extraKnownMarketplaces[marketplace] = explicitSource;
       this.logger.debug(
         `Recorded explicit --source for marketplace '${pc.bold(marketplace)}' on module '${pc.bold(this.moduleName)}'.`
       );

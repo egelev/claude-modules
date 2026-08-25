@@ -4,6 +4,7 @@ import { InstalledPluginsCache } from "../src/core/InstalledPluginsCache.js";
 import { KnownMarketplacesCache } from "../src/core/KnownMarketplacesCache.js";
 import { MarketplaceRegistry } from "../src/core/MarketplaceRegistry.js";
 import { ClaudeRunResult } from "../src/core/ClaudeRunner.js";
+import { MarketplaceCacheInstaller } from "../src/core/MarketplaceCacheInstaller.js";
 import { PluginCacheInstaller } from "../src/core/PluginCacheInstaller.js";
 import { ModuleStore } from "../src/core/ModuleStore.js";
 import { Logger, LogLevel } from "../src/util/Logger.js";
@@ -340,6 +341,12 @@ describe("plugin install's cache-warming neutralizes its own user-scope enableme
     };
     const knownMarketplacesCache = new KnownMarketplacesCache(paths);
     const installedPluginsCache = new InstalledPluginsCache(paths);
+    // Same shared `runClaude` fake as pluginCacheInstaller below, so marketplace-add and
+    // plugin-install/-disable args all land in the one `runs` array these tests assert against. All
+    // calls below pass sourceJson: undefined, so no marketplace-add call fires today — a future test
+    // in this block that adds --source would see its marketplace-add args interleaved with the
+    // plugin args already asserted here.
+    const marketplaceCacheInstaller = new MarketplaceCacheInstaller(knownMarketplacesCache, logger, {}, runClaude);
     const pluginCacheInstaller = new PluginCacheInstaller(
       knownMarketplacesCache,
       installedPluginsCache,
@@ -354,6 +361,7 @@ describe("plugin install's cache-warming neutralizes its own user-scope enableme
       new ModuleStore(paths),
       new MarketplaceRegistry(paths),
       knownMarketplacesCache,
+      marketplaceCacheInstaller,
       pluginCacheInstaller,
       logger,
       dryRun
@@ -405,5 +413,79 @@ describe("plugin install's cache-warming neutralizes its own user-scope enableme
     await build({ ok: false, detail: "no network" }).execute();
 
     expect(runs).toEqual([["plugin", "install", "a@mp", "--scope", "user", "-y"]]);
+  });
+});
+
+describe("plugin install --source syncs the marketplace to Claude Code", () => {
+  // Regression coverage for the "isn't cached ... Run 'claude plugin marketplace add'" warning:
+  // --source is meant to repair exactly this, so it must reach MarketplaceCacheInstaller even when
+  // the plugin was already marked enabled by an earlier, only-partially-successful install (that's
+  // the scenario in the bug report this covers) — see InstallCommand's --source handling, hoisted
+  // above the "already enabled" bail for this reason.
+  let h: Harness;
+  let paths: Paths;
+  let runs: string[][];
+
+  function build(): InstallCommand {
+    const logger = new Logger(LogLevel.ERROR);
+    const result: ClaudeRunResult = { ok: true, stdout: "" };
+    const runClaude = async (args: string[]) => {
+      runs.push(args);
+      return result;
+    };
+    const knownMarketplacesCache = new KnownMarketplacesCache(paths);
+    const installedPluginsCache = new InstalledPluginsCache(paths);
+    const marketplaceCacheInstaller = new MarketplaceCacheInstaller(knownMarketplacesCache, logger, {}, runClaude);
+    const pluginCacheInstaller = new PluginCacheInstaller(
+      knownMarketplacesCache,
+      installedPluginsCache,
+      logger,
+      {},
+      runClaude
+    );
+    return new InstallCommand(
+      "a@mp",
+      "demo",
+      JSON.stringify(githubSource("owner/repo")),
+      new ModuleStore(paths),
+      new MarketplaceRegistry(paths),
+      knownMarketplacesCache,
+      marketplaceCacheInstaller,
+      pluginCacheInstaller,
+      logger,
+      false
+    );
+  }
+
+  beforeEach(async () => {
+    h = await Harness.create();
+    paths = new Paths(h.env);
+    runs = [];
+  });
+
+  afterEach(async () => {
+    await h.cleanup();
+  });
+
+  it("registers the marketplace with Claude Code on a fresh install", async () => {
+    await h.writeModule("demo", { enabledPlugins: {}, extraKnownMarketplaces: {}, composedModules: [] });
+    await h.writeInstalledPlugins(["a@mp"]); // already cached, so no plugin-install call interferes
+
+    await build().execute();
+
+    expect(runs).toEqual([["plugin", "marketplace", "add", "owner/repo", "--scope", "user"]]);
+  });
+
+  it("still registers the marketplace when the plugin is already enabled (the repair case)", async () => {
+    const original = { enabledPlugins: { "a@mp": true }, extraKnownMarketplaces: {}, composedModules: [] };
+    await h.writeModule("demo", original);
+
+    await build().execute();
+
+    // Only the marketplace-add call: the "already enabled" bail still skips the module write and
+    // the plugin-cache-warming step (no "plugin install a@mp ..." call alongside it).
+    expect(runs).toEqual([["plugin", "marketplace", "add", "owner/repo", "--scope", "user"]]);
+    const moduleAfter = JSON.parse(await h.readFileAt("modules/demo/settings.json", h.modulesHome));
+    expect(moduleAfter).toEqual(original);
   });
 });
