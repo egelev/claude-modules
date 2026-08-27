@@ -65,6 +65,7 @@ Commands:
     [--verify]                            Also cross-check Claude Code's own plugin resolution
     [--json]                              Print one JSON object to stdout instead of the
                                            human-readable report (exit code unchanged)
+  completions <bash|zsh>                  Print a tab-completion script for your shell
 
 Scopes (used by --scope in 'enable', 'disable', 'disable-all', 'reload', 'update', and 'status'):
   user     ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR/settings.json, if set)
@@ -758,6 +759,29 @@ Examples:
   claude-modules status
   claude-modules status --scope project
   claude-modules status --json
+`,
+
+  completions: `Usage: claude-modules completions <bash|zsh>
+
+Print a tab-completion script for the given shell to stdout. Completes
+top-level commands, 'marketplace'/'plugin'/'compose' subcommands, every
+command's own flags, and enum-valued flag values (--scope/--from-scope:
+user|project|local).
+
+Positional arguments like <module> are not completed — nothing in the
+generated script talks to your modules directory, so it's safe to eval in
+any shell startup file regardless of $CLAUDE_MODULES_HOME.
+
+Install:
+  echo 'eval "$(claude-modules completions bash)"' >> ~/.bashrc
+  echo 'eval "$(claude-modules completions zsh)"' >> ~/.zshrc   # after compinit runs
+
+See docs/completions.md for zsh's compinit-ordering requirement and the
+alternative of saving the output as a file in $fpath.
+
+Examples:
+  claude-modules completions bash
+  claude-modules completions zsh
 `,
 };
 

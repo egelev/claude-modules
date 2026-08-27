@@ -272,6 +272,7 @@ detect drift. One per scope:
 | `status`                                  | Audit a scope; exit-coded for CI                                   | [docs](docs/status.md#status)                   |
 | `export <module>`                         | Pack a module and its composition chain into a `.tar.gz`           | [docs](docs/transfer.md#export)                 |
 | `import <archive>`                        | Unpack one on another machine                                      | [docs](docs/transfer.md#import)                 |
+| `completions <bash|zsh>`                  | Print a tab-completion script for your shell                       | [docs](docs/completions.md#completions)         |
 
 ### Global options
 
@@ -282,9 +283,9 @@ detect drift. One per scope:
 | `--verbose`       | Enable debug logging                                                            |
 | `--dry-run`       | Preview a mutating command's effect — writes nothing, runs no external commands |
 
-`--dry-run` is supported by all 15 mutating commands, and is a no-op on the four that never write
-(`list`, `info`, `status`, `marketplace list`). Running a bare group name — `claude-modules plugin`,
-`marketplace`, or `compose` — prints that group's usage.
+`--dry-run` is supported by all 15 mutating commands, and is a no-op on the five that never write
+(`list`, `info`, `status`, `marketplace list`, `completions`). Running a bare group name —
+`claude-modules plugin`, `marketplace`, or `compose` — prints that group's usage.
 
 ---
 

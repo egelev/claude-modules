@@ -22,11 +22,14 @@ import { StatusCommand } from "./commands/StatusCommand.js";
 import { UpdateCommand } from "./commands/UpdateCommand.js";
 import { ExportModuleCommand } from "./commands/ExportModuleCommand.js";
 import { ImportModuleCommand } from "./commands/ImportModuleCommand.js";
+import { CompletionsCommand } from "./commands/CompletionsCommand.js";
 import { Logger, LogLevel } from "../util/Logger.js";
 import { CliError } from "../util/errors.js";
 import { Scope, SCOPES } from "../core/types.js";
 import { GLOBAL_HELP, COMMAND_HELP, GROUP_HELP } from "./help.js";
 import { buildServices } from "./services.js";
+import { generateBashCompletion, generateZshCompletion } from "./completions.js";
+import type { CompletionShape, OptionConfig } from "./completions.js";
 
 /** Top-level names that are groups, and the subcommands each accepts. */
 export const COMMAND_GROUPS: Record<string, readonly string[]> = {
@@ -42,6 +45,84 @@ function parseScope(value: string | undefined): Scope {
   }
   return value as Scope;
 }
+
+const SHELLS = ["bash", "zsh"] as const;
+
+function parseShell(value: string): "bash" | "zsh" {
+  if (!SHELLS.includes(value as (typeof SHELLS)[number])) {
+    throw new CliError(`Invalid shell '${value}'. Expected one of: ${SHELLS.join(", ")}.`);
+  }
+  return value as "bash" | "zsh";
+}
+
+/** Flags that take one of a known, enumerable set of values — used only by the completions
+ * generator; `parseScope` still does the real validation at parse time. */
+const ENUM_VALUED_FLAGS: Record<string, readonly string[]> = {
+  scope: SCOPES,
+  "from-scope": SCOPES,
+};
+
+/** Every dispatch key's own `parseArgs` options — the single source of truth both the real argument
+ * parser (spread into each switch case below) and the completions generator read, so a command's
+ * flags can never drift between what's accepted and what's completed.
+ *
+ * `satisfies`, not a `Record<string, Record<string, OptionConfig>>` annotation: that annotation
+ * would widen every entry's type to a generic index signature, which erases the literal flag names
+ * `parseArgs` needs to infer a precisely-typed `values` result (e.g. `values["from-scope"]`) at each
+ * call site below. `satisfies` checks the same shape without widening. */
+export const COMMAND_OPTIONS = {
+  list: {},
+  info: {},
+  create: {
+    "from-scope": { type: "string" },
+    compose: { type: "string", multiple: true },
+  },
+  remove: {},
+  export: { output: { type: "string" } },
+  import: {
+    name: { type: "string" },
+    "composed-prefix": { type: "string" },
+  },
+  "plugin install": { source: { type: "string" } },
+  "plugin uninstall": { disable: { type: "boolean" } },
+  "marketplace add": {
+    name: { type: "string" },
+    source: { type: "string" },
+    module: { type: "string" },
+  },
+  "marketplace remove": { module: { type: "string" } },
+  "marketplace list": { module: { type: "string" } },
+  "compose add": {},
+  "compose remove": {},
+  enable: {
+    scope: { type: "string" },
+    only: { type: "boolean" },
+    install: { type: "boolean" },
+    // Hand-parsed out of argv by extractSaveFlag() below, before parseArgs ever runs — a bare
+    // boolean-or-string flag isn't expressible in parseArgs's schema. Declared here only so the
+    // completions generator knows '--save' belongs to this command; parsing never reads
+    // values.save.
+    save: { type: "boolean" },
+  },
+  disable: {
+    scope: { type: "string" },
+    // Same as enable.save above: extracted by extractSaveFlag(), never read back via values.save.
+    save: { type: "boolean" },
+  },
+  "disable-all": { scope: { type: "string" } },
+  reload: {
+    scope: { type: "string" },
+    file: { type: "string" },
+    install: { type: "boolean" },
+  },
+  update: { scope: { type: "string" } },
+  status: {
+    scope: { type: "string" },
+    verify: { type: "boolean" },
+    json: { type: "boolean" },
+  },
+  completions: {},
+} as const satisfies Record<string, Record<string, OptionConfig>>;
 
 /**
  * Pulls `--save` / `--save=<path>` out of `args` before the rest goes through `parseArgs`.
@@ -124,6 +205,29 @@ function resolveDispatchKey(argv: readonly string[]): string {
     return `${commandName} ${subCommandName}`;
   }
   return commandName ?? "";
+}
+
+/** Assembles the data the completions generator needs from this file's own dispatch tables, so the
+ * generated bash/zsh scripts can never describe a command surface other than the real one. */
+export function buildCompletionShape(): CompletionShape {
+  const topLevelCommands = [
+    "help",
+    "version",
+    ...Object.keys(COMMAND_GROUPS),
+    ...Object.keys(COMMAND_HELP).filter((key) => !key.includes(" ")),
+  ].sort();
+  // HELP_OPTION's three entries are stable and small enough that deriving this list from its
+  // (deliberately heterogeneous, per-key) type isn't worth fighting — see the `short` field only
+  // 'help' declares.
+  const globalFlags = ["-h", "--help", "--dry-run", "--verbose"];
+  return {
+    topLevelCommands,
+    groupSubcommands: COMMAND_GROUPS,
+    commandOptions: COMMAND_OPTIONS,
+    globalFlags,
+    enumValuedFlags: ENUM_VALUED_FLAGS,
+    positionalChoices: { completions: SHELLS },
+  };
 }
 
 /** Parses argv and dispatches to the appropriate Command, wiring up dependencies along the way. */
@@ -220,12 +324,12 @@ export class Cli {
     switch (dispatchKey) {
       case "list": {
         // Parsed purely so an unknown option is rejected here too, rather than silently ignored.
-        parseArgs({ args: rest, options: HELP_OPTION, allowPositionals: true });
+        parseArgs({ args: rest, options: { ...COMMAND_OPTIONS.list, ...HELP_OPTION }, allowPositionals: true });
         return new ListModulesCommand(moduleStore, logger);
       }
 
       case "info": {
-        const { positionals } = parseArgs({ args: rest, options: HELP_OPTION, allowPositionals: true });
+        const { positionals } = parseArgs({ args: rest, options: { ...COMMAND_OPTIONS.info, ...HELP_OPTION }, allowPositionals: true });
         const name = requirePositional(positionals, 0, "info");
         return new InfoCommand(name, moduleStore, logger);
       }
@@ -233,7 +337,7 @@ export class Cli {
       case "create": {
         const { values, positionals } = parseArgs({
           args: rest,
-          options: { "from-scope": { type: "string" }, compose: { type: "string", multiple: true }, ...HELP_OPTION },
+          options: { ...COMMAND_OPTIONS.create, ...HELP_OPTION },
           allowPositionals: true,
         });
         const name = requirePositional(positionals, 0, "create");
@@ -254,7 +358,7 @@ export class Cli {
       }
 
       case "remove": {
-        const { positionals } = parseArgs({ args: rest, options: HELP_OPTION, allowPositionals: true });
+        const { positionals } = parseArgs({ args: rest, options: { ...COMMAND_OPTIONS.remove, ...HELP_OPTION }, allowPositionals: true });
         const name = requirePositional(positionals, 0, "remove");
         return new RemoveModuleCommand(name, moduleStore, moduleListFile, this.cwd, logger, dryRun);
       }
@@ -262,7 +366,7 @@ export class Cli {
       case "export": {
         const { values, positionals } = parseArgs({
           args: rest,
-          options: { output: { type: "string" }, ...HELP_OPTION },
+          options: { ...COMMAND_OPTIONS.export, ...HELP_OPTION },
           allowPositionals: true,
         });
         const name = requirePositional(positionals, 0, "export");
@@ -272,7 +376,7 @@ export class Cli {
       case "import": {
         const { values, positionals } = parseArgs({
           args: rest,
-          options: { name: { type: "string" }, "composed-prefix": { type: "string" }, ...HELP_OPTION },
+          options: { ...COMMAND_OPTIONS.import, ...HELP_OPTION },
           allowPositionals: true,
         });
         const archivePath = requirePositional(positionals, 0, "import");
@@ -290,10 +394,7 @@ export class Cli {
       case "plugin install": {
         const { values, positionals } = parseArgs({
           args: commandRest,
-          options: {
-            source: { type: "string" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS["plugin install"], ...HELP_OPTION },
           allowPositionals: true,
         });
         if (positionals.length < 2) {
@@ -320,10 +421,7 @@ export class Cli {
       case "plugin uninstall": {
         const { values, positionals } = parseArgs({
           args: commandRest,
-          options: {
-            disable: { type: "boolean" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS["plugin uninstall"], ...HELP_OPTION },
           allowPositionals: true,
         });
         if (positionals.length < 2) {
@@ -339,12 +437,7 @@ export class Cli {
       case "marketplace add": {
         const { values, positionals } = parseArgs({
           args: commandRest,
-          options: {
-            name: { type: "string" },
-            source: { type: "string" },
-            module: { type: "string" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS["marketplace add"], ...HELP_OPTION },
           allowPositionals: true,
         });
         const spec = requirePositional(positionals, 0, "marketplace add");
@@ -364,7 +457,7 @@ export class Cli {
       case "marketplace remove": {
         const { values, positionals } = parseArgs({
           args: commandRest,
-          options: { module: { type: "string" }, ...HELP_OPTION },
+          options: { ...COMMAND_OPTIONS["marketplace remove"], ...HELP_OPTION },
           allowPositionals: true,
         });
         const name = requirePositional(positionals, 0, "marketplace remove");
@@ -374,14 +467,18 @@ export class Cli {
       case "marketplace list": {
         const { values } = parseArgs({
           args: commandRest,
-          options: { module: { type: "string" }, ...HELP_OPTION },
+          options: { ...COMMAND_OPTIONS["marketplace list"], ...HELP_OPTION },
           allowPositionals: true,
         });
         return new ListMarketplacesCommand(values.module, marketplaceRegistry, moduleStore, logger);
       }
 
       case "compose add": {
-        const { positionals } = parseArgs({ args: commandRest, options: HELP_OPTION, allowPositionals: true });
+        const { positionals } = parseArgs({
+          args: commandRest,
+          options: { ...COMMAND_OPTIONS["compose add"], ...HELP_OPTION },
+          allowPositionals: true,
+        });
         if (positionals.length < 2) {
           throw new CliError(
             "compose add requires a module and at least one composed module. Run 'claude-modules compose add --help' for usage."
@@ -393,7 +490,11 @@ export class Cli {
       }
 
       case "compose remove": {
-        const { positionals } = parseArgs({ args: commandRest, options: HELP_OPTION, allowPositionals: true });
+        const { positionals } = parseArgs({
+          args: commandRest,
+          options: { ...COMMAND_OPTIONS["compose remove"], ...HELP_OPTION },
+          allowPositionals: true,
+        });
         if (positionals.length < 2) {
           throw new CliError(
             "compose remove requires a module and at least one composed module. Run 'claude-modules compose remove --help' for usage."
@@ -408,12 +509,7 @@ export class Cli {
         const { save, savePath, rest: restWithoutSave } = extractSaveFlag(rest);
         const { values, positionals } = parseArgs({
           args: restWithoutSave,
-          options: {
-            scope: { type: "string" },
-            only: { type: "boolean" },
-            install: { type: "boolean" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS.enable, ...HELP_OPTION },
           allowPositionals: true,
         });
         if (positionals.length === 0) {
@@ -444,10 +540,7 @@ export class Cli {
         }
         const { values, positionals } = parseArgs({
           args: restWithoutSave,
-          options: {
-            scope: { type: "string" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS.disable, ...HELP_OPTION },
           allowPositionals: true,
         });
         if (positionals.length === 0) {
@@ -469,10 +562,7 @@ export class Cli {
       case "disable-all": {
         const { values } = parseArgs({
           args: rest,
-          options: {
-            scope: { type: "string" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS["disable-all"], ...HELP_OPTION },
           allowPositionals: true,
         });
         const scope = parseScope(values.scope);
@@ -482,12 +572,7 @@ export class Cli {
       case "reload": {
         const { values } = parseArgs({
           args: rest,
-          options: {
-            scope: { type: "string" },
-            file: { type: "string" },
-            install: { type: "boolean" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS.reload, ...HELP_OPTION },
           allowPositionals: true,
         });
         const scope = parseScope(values.scope);
@@ -506,10 +591,7 @@ export class Cli {
       case "update": {
         const { values, positionals } = parseArgs({
           args: rest,
-          options: {
-            scope: { type: "string" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS.update, ...HELP_OPTION },
           allowPositionals: true,
         });
         const scope = parseScope(values.scope);
@@ -528,12 +610,7 @@ export class Cli {
       case "status": {
         const { values } = parseArgs({
           args: rest,
-          options: {
-            scope: { type: "string" },
-            verify: { type: "boolean" },
-            json: { type: "boolean" },
-            ...HELP_OPTION,
-          },
+          options: { ...COMMAND_OPTIONS.status, ...HELP_OPTION },
           allowPositionals: true,
         });
         const scope = parseScope(values.scope);
@@ -551,6 +628,18 @@ export class Cli {
           enabledPluginsVerifier,
           values.json ?? false
         );
+      }
+
+      case "completions": {
+        const { positionals } = parseArgs({
+          args: rest,
+          options: { ...COMMAND_OPTIONS.completions, ...HELP_OPTION },
+          allowPositionals: true,
+        });
+        const shell = parseShell(requirePositional(positionals, 0, "completions"));
+        const script =
+          shell === "bash" ? generateBashCompletion(buildCompletionShape()) : generateZshCompletion(buildCompletionShape());
+        return new CompletionsCommand(script);
       }
 
       default:

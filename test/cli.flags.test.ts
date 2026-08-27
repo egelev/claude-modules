@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { COMMAND_GROUPS, MUTATING_COMMANDS } from "../src/cli/Cli.js";
+import { COMMAND_GROUPS, MUTATING_COMMANDS, COMMAND_OPTIONS, buildCompletionShape } from "../src/cli/Cli.js";
 import { COMMAND_HELP, GROUP_HELP } from "../src/cli/help.js";
+import { generateBashCompletion } from "../src/cli/completions.js";
 import { Harness, githubSource } from "./helpers/harness.js";
 
 /**
@@ -30,6 +31,7 @@ const COMMANDS: { name: string; argv: string[] }[] = [
   { name: "reload", argv: ["reload"] },
   { name: "update", argv: ["update", "demo"] },
   { name: "status", argv: ["status"] },
+  { name: "completions", argv: ["completions", "bash"] },
 ];
 
 describe("global flags are accepted by every command", () => {
@@ -270,6 +272,34 @@ describe("help tables stay in sync with the dispatch table", () => {
     // command's --dry-run banner with no test failing anywhere.
     for (const key of MUTATING_COMMANDS) {
       expect(COMMAND_HELP[key], `MUTATING_COMMANDS has '${key}', which isn't a real dispatch key`).toBeDefined();
+    }
+  });
+
+  it("COMMAND_OPTIONS covers exactly the dispatch keys that have help text", () => {
+    expect(new Set(Object.keys(COMMAND_OPTIONS))).toEqual(new Set(Object.keys(COMMAND_HELP)));
+  });
+
+  it("every COMMAND_OPTIONS flag is documented in that command's help text", () => {
+    // Catches a *mis-wired* entry, not just a missing one — e.g. swapping 'marketplace remove' and
+    // 'marketplace list' (both shaped { module }) would break nothing else, since both are
+    // structurally valid parseArgs configs, but the flag would stop matching what that command's own
+    // help text documents.
+    for (const [key, opts] of Object.entries(COMMAND_OPTIONS)) {
+      for (const flag of Object.keys(opts)) {
+        expect(COMMAND_HELP[key], `${key} help omits --${flag}`).toContain(`--${flag}`);
+      }
+    }
+  });
+
+  it("the generated bash completion script names every top-level command and group subcommand", () => {
+    const script = generateBashCompletion(buildCompletionShape());
+    for (const command of [...Object.keys(COMMAND_GROUPS), ...Object.keys(COMMAND_HELP).filter((k) => !k.includes(" "))]) {
+      expect(script, `bash completion is missing top-level command '${command}'`).toContain(command);
+    }
+    for (const subcommands of Object.values(COMMAND_GROUPS)) {
+      for (const subcommand of subcommands) {
+        expect(script, `bash completion is missing subcommand '${subcommand}'`).toContain(subcommand);
+      }
     }
   });
 });
