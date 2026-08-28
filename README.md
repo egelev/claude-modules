@@ -2,10 +2,9 @@
 
 **Composable, portable plugin bundles for [Claude Code](https://claude.com/claude-code).**
 
+[![npm](https://img.shields.io/npm/v/claude-modules)](https://www.npmjs.com/package/claude-modules)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
-
-<!-- Add once published: [![npm](https://img.shields.io/npm/v/claude-modules)](https://www.npmjs.com/package/claude-modules) -->
 
 Every module is:
 
@@ -108,13 +107,17 @@ currently performing helps — though the picture is more nuanced for MCP-heavy 
 
 ## Installation
 
-> **Not yet published to npm.** The command below is a placeholder.
-
 ```bash
-npm install -g claude-modules
+npm install -g claude-modules      # global CLI
 ```
 
-From source, today:
+Or run it without installing:
+
+```bash
+npx claude-modules --help
+```
+
+From source:
 
 ```bash
 git clone https://github.com/egelev/claude-modules.git

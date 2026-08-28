@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  package:
+    name: package (pack + install + smoke)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # `prepack` rebuilds dist/ before packing, so this is the exact tarball a release would ship.
+      - name: Pack the tarball
+        run: npm pack
+
+      - name: List tarball contents
+        run: tar -tzf claude-modules-*.tgz
+
+      - name: Install the packed CLI globally
+        run: npm install -g ./claude-modules-*.tgz
+
+      # The only check that exercises the shipped layout: bin shebang/exec bit, ESM resolution
+      # outside the repo, and VersionCommand reading package.json from node_modules/.../dist/.
+      - name: Smoke-test the installed CLI
+        run: |
+          set -euo pipefail
+          expected="$(node -p "require('./package.json').version")"
+          actual="$(claude-modules --version)"
+          echo "package.json=$expected  cli --version=$actual"
+          [ "$expected" = "$actual" ] || { echo "::error::version mismatch"; exit 1; }
+          claude-modules --help > /dev/null
+          CLAUDE_MODULES_HOME="$(mktemp -d)" claude-modules list > /dev/null
+
+      # Belt-and-suspenders only. This bin-only package has no exports/main/types, so publint has
+      # little to check — a clean run is expected, not meaningful coverage.
+      - name: publint
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pkg"
+          tar -xzf claude-modules-*.tgz -C "$RUNNER_TEMP/pkg" --strip-components=1
+          npx --yes publint "$RUNNER_TEMP/pkg"
