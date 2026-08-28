@@ -29,13 +29,18 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "dev": "CLAUDE_MODULES_HOME=. tsx src/claude-modules.ts",
+    "prebuild": "rm -rf dist",
     "build": "tsc",
     "postbuild": "chmod +x dist/claude-modules.js",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit && tsc --noEmit --project tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",

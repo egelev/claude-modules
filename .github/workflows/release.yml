@@ -1,0 +1,80 @@
+name: Release
+
+# Runs only when a GitHub Release is published (Releases -> Draft a new release -> Publish).
+# Merging to main never triggers this.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write # attach the packed .tgz to the Release
+  id-token: write # OIDC token for npm Trusted Publishing (no stored NPM token)
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: release
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      # No registry-url: that makes setup-node write an `_authToken` line into .npmrc, which
+      # interferes with the OIDC exchange when no token is set. npm's default registry is
+      # registry.npmjs.org already. (actions/setup-node#1551, npm/documentation#1960)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Trusted Publishing needs npm >= 11.5.1; some Node 24.0.x images still ship 11.3.x.
+      - run: npm install -g npm@^11.5.1
+      - run: node --version && npm --version
+
+      - run: npm ci
+
+      - name: Verify the Release tag matches package.json
+        run: |
+          set -euo pipefail
+          pkg="$(node -p "require('./package.json').version")"
+          echo "release tag=$TAG   package.json=$pkg"
+          if [ "$pkg" != "${TAG#v}" ]; then
+            echo "::error::Release tag $TAG does not match package.json version $pkg. Bump package.json in a PR first."
+            exit 1
+          fi
+
+      # Re-run the full suite: a Release can be cut from a commit that never went through PR CI.
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      # Build the exact tarball that will be published (prepack rebuilds dist/) and prove the
+      # installed layout works before doing anything irreversible.
+      - name: Pack and smoke-test the tarball
+        run: |
+          set -euo pipefail
+          npm pack
+          npm install -g ./claude-modules-*.tgz
+          expected="$(node -p "require('./package.json').version")"
+          actual="$(claude-modules --version)"
+          echo "package.json=$expected  cli --version=$actual"
+          [ "$expected" = "$actual" ] || { echo "::error::version mismatch in packed CLI"; exit 1; }
+          claude-modules --help > /dev/null
+
+      - name: Attach the tarball to the Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" claude-modules-*.tgz --clobber
+
+      # Last step: npm publish is irreversible, so every failure before this point is a clean re-run.
+      - name: Publish to npm (Trusted Publishing / OIDC)
+        run: |
+          cat ~/.npmrc 2>/dev/null || echo "no user .npmrc (expected)"
+          npm publish ${{ github.event.release.prerelease && '--tag next' || '' }}
