@@ -254,8 +254,8 @@ detect drift. One per scope:
 
 ## Commands
 
-| Command                                   | What it does                                                       |                                                  |
-| ------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------ |
+| Command                                   | What it does                                                       |                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
 | `list`                                    | List every module with its plugin and marketplace counts           | [docs](docs/modules.md#list)                    |
 | `info <module>`                           | Show one module's plugins, marketplaces, and composition           | [docs](docs/modules.md#info)                    |
 | `create <module>`                         | Create a module — empty, seeded from a scope, or composing others  | [docs](docs/modules.md#create)                  |
@@ -275,7 +275,7 @@ detect drift. One per scope:
 | `status`                                  | Audit a scope; exit-coded for CI                                   | [docs](docs/status.md#status)                   |
 | `export <module>`                         | Pack a module and its composition chain into a `.tar.gz`           | [docs](docs/transfer.md#export)                 |
 | `import <archive>`                        | Unpack one on another machine                                      | [docs](docs/transfer.md#import)                 |
-| `completions <bash\|zsh>`                  | Print a tab-completion script for your shell                       | [docs](docs/completions.md#completions)          |
+| `completions <bash\|zsh>`                 | Print a tab-completion script for your shell                       | [docs](docs/completions.md#completions)         |
 
 ### Global options
 
@@ -330,33 +330,30 @@ running against stale types — vitest strips types with esbuild and never check
 
 Publishing to npm is deliberate and separate from merging. `.github/workflows/ci.yml` runs on every
 PR and push to `main` (typecheck + tests on Node 20/22/24, then a pack-and-install smoke test).
-Cutting a release is a two-workflow handoff: `.github/workflows/cut-release.yml` tags `main` and
-opens a **draft** GitHub Release; `.github/workflows/release.yml` runs **when a Release is created
-as a draft**, builds it, attaches the tarball, publishes to npm, then publishes the Release itself
-as its last step. Merging to `main` never publishes anything on its own.
+`.github/workflows/release.yml` is manually triggered (`workflow_dispatch`) and does everything
+else in one run: tags `main`, builds and tests it, packs and smoke-tests the tarball, opens the
+GitHub Release as a **draft**, attaches the tarball, publishes to npm, and only as its last step
+publishes the Release itself. Merging to `main` never publishes anything on its own.
 
 GitHub's [immutable releases](https://github.blog/changelog/2025-10-28-immutable-releases-are-now-generally-available/)
-lock a release's assets the instant it's published, so the tarball has to be attached *before*
-publish — hence the draft step. `cut-release.yml` exists so nobody has to remember that by hand
-(tag-then-draft, and "Save draft" rather than "Publish release"); `release.yml` also refuses to run
-against a Release that isn't a draft, as a backstop if someone publishes one directly anyway.
+lock a release's assets the instant it's published, so the tarball has to be attached _before_
+publish — hence the draft step, done and undone inside the same run.
 
 ### Cutting a release
 
 1. **Bump the version in a PR.** Edit `version` in `package.json` following
    [semver](https://semver.org/) — `npm version --no-git-tag-version <patch|minor|major>` does it —
    and merge once CI is green. Nothing publishes yet.
-2. **Run the "Cut Release" workflow.** **Actions → Cut Release → Run workflow** (or
-   `gh workflow run cut-release.yml`). It reads the version off `main`'s `package.json`, tags and
-   pushes it, and opens a draft Release from that tag — which immediately kicks off `release.yml`.
-3. **Let it run.** `release.yml` fails fast unless the tag matches `package.json`, re-runs the full
-   suite, packs and smoke-tests the tarball, attaches the `.tgz` to the still-draft Release,
-   publishes to npm via OIDC, and only then publishes the Release itself (making it live and
-   immutable). A normal version goes to the `latest` dist-tag; a prerelease version (`X.Y.Z-rc.1`,
-   etc.) is auto-detected from the `-` and goes to `next`, so `npm install -g claude-modules` never
-   picks it up.
+2. **Run the "Release" workflow.** **Actions → Release → Run workflow**, with **Use workflow from:
+   main** (or `gh workflow run release.yml --ref main`).
+3. **Let it run.** It refuses to run from anything but `main`, fails fast unless the computed tag
+   already has no Release, re-runs the full test suite, packs and smoke-tests the tarball, tags and
+   pushes `main`, opens the Release as a draft, attaches the `.tgz`, publishes to npm via OIDC, and
+   only then publishes the Release itself (making it live and immutable). A normal version goes to
+   the `latest` dist-tag; a prerelease version (`X.Y.Z-rc.1`, etc.) is auto-detected from the `-`
+   and goes to `next`, so `npm install -g claude-modules` never picks it up.
 4. **Approve and verify.** If the `release` environment requires a reviewer, approve the run in the
-   **Actions** tab. Then confirm the new version and its provenance badge on
+   **Actions** tab before it starts. Then confirm the new version and its provenance badge on
    [npmjs.com](https://www.npmjs.com/package/claude-modules) (`npm audit signatures` after
    installing also verifies it).
 
