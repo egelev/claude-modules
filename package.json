@@ -1,6 +1,6 @@
 {
   "name": "claude-modules",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Composable plugin modules for Claude Code, applied across user/project/local scopes",
   "keywords": [
     "claude",
