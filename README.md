@@ -48,7 +48,7 @@ claude-modules enable full-dev --scope project --save   # transitively pulls in 
 ```
 
 > **Already have a repo configured the way you like** — by hand, or through `/plugin`? `create
-> <module> --from-scope <scope>` captures it in one shot instead of typing every `plugin install`.
+<module> --from-scope <scope>` captures it in one shot instead of typing every `plugin install`.
 > See [Quick start](#quick-start) below.
 
 Don't need `full-dev` as a permanent unit? Name the modules directly on one `enable` call instead —
@@ -255,7 +255,7 @@ detect drift. One per scope:
 ## Commands
 
 | Command                                   | What it does                                                       |                                                 |
-| ----------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
+| ----------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- | --------------------------------------- |
 | `list`                                    | List every module with its plugin and marketplace counts           | [docs](docs/modules.md#list)                    |
 | `info <module>`                           | Show one module's plugins, marketplaces, and composition           | [docs](docs/modules.md#info)                    |
 | `create <module>`                         | Create a module — empty, seeded from a scope, or composing others  | [docs](docs/modules.md#create)                  |
@@ -275,7 +275,7 @@ detect drift. One per scope:
 | `status`                                  | Audit a scope; exit-coded for CI                                   | [docs](docs/status.md#status)                   |
 | `export <module>`                         | Pack a module and its composition chain into a `.tar.gz`           | [docs](docs/transfer.md#export)                 |
 | `import <archive>`                        | Unpack one on another machine                                      | [docs](docs/transfer.md#import)                 |
-| `completions <bash|zsh>`                  | Print a tab-completion script for your shell                       | [docs](docs/completions.md#completions)         |
+| `completions <bash                        | zsh>`                                                              | Print a tab-completion script for your shell    | [docs](docs/completions.md#completions) |
 
 ### Global options
 
@@ -323,6 +323,35 @@ Tests drive the real `Cli` against throwaway temp directories, with both `CLAUDE
 Note that `npm run typecheck` runs `tsc` twice: once for the build config (`src/` only, matching what
 ships) and once for `tsconfig.test.json`, which adds `test/`. Without the second pass, tests keep
 running against stale types — vitest strips types with esbuild and never checks them.
+
+---
+
+## Releasing
+
+Publishing to npm is deliberate and separate from merging. `.github/workflows/ci.yml` runs on every
+PR and push to `main` (typecheck + tests on Node 20/22/24, then a pack-and-install smoke test);
+`.github/workflows/release.yml` runs **only when a GitHub Release is published** and does the npm
+publish. Merging to `main` never publishes anything.
+
+### Cutting a release
+
+1. **Bump the version in a PR.** Edit `version` in `package.json` following
+   [semver](https://semver.org/) — `npm version --no-git-tag-version <patch|minor|major>` does it —
+   and merge once CI is green. Nothing publishes yet.
+2. **Draft the Release.** Repo **Releases → Draft a new release**:
+   - **Choose a tag** → type a new tag `vX.Y.Z` matching the version you just merged (the leading
+     `v` is expected; the workflow strips it) → **Create new tag on publish**.
+   - **Target**: `main`.
+   - **Generate release notes** to populate the body from merged PRs.
+   - For a prerelease (`vX.Y.Z-rc.1`, etc.), tick **Set as a pre-release**.
+3. **Publish release.** This triggers `release.yml`, which fails fast unless the tag matches
+   `package.json`, then re-runs the full suite, packs and smoke-tests the tarball, publishes to npm
+   via OIDC, and attaches the `.tgz` to the Release. A normal release goes to the `latest` dist-tag;
+   a prerelease goes to `next`, so `npm install -g claude-modules` never picks it up.
+4. **Approve and verify.** If the `release` environment requires a reviewer, approve the run in the
+   **Actions** tab. Then confirm the new version and its provenance badge on
+   [npmjs.com](https://www.npmjs.com/package/claude-modules) (`npm audit signatures` after
+   installing also verifies it).
 
 ---
 

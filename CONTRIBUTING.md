@@ -33,14 +33,8 @@ them and they make the generated release notes readable — but they are not enf
 
 ## Releasing (maintainers)
 
-Releases are separate from merges — nothing ships automatically.
-
-1. Open a PR that bumps `version` in `package.json` (semver). Merge it.
-2. On GitHub: **Releases → Draft a new release**. Create a new tag `vX.Y.Z` targeting `main`,
-   click **Generate release notes**, and **Publish**.
-3. The `Release` workflow checks the tag against `package.json`, re-runs the full suite, and
-   publishes to npm via OIDC Trusted Publishing (no token) with a provenance attestation, then
-   attaches the tarball to the Release.
-
-Prereleases: tick the "pre-release" box when publishing the Release and it goes out under the
-`next` dist-tag instead of `latest`.
+Releases are separate from merges — nothing ships automatically. Bump `version` in `package.json`
+in a PR, merge it, then draft and publish a GitHub Release with tag `vX.Y.Z` on `main`; the
+`Release` workflow does the npm publish. Full steps, plus the one-time repository setup (the
+`release` environment, branch protection, Trusted Publishing, Dependabot, Private Vulnerability
+Reporting), are in the [**Releasing**](README.md#releasing) section of the README.
