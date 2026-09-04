@@ -330,25 +330,39 @@ running against stale types — vitest strips types with esbuild and never check
 
 Publishing to npm is deliberate and separate from merging. `.github/workflows/ci.yml` runs on every
 PR and push to `main` (typecheck + tests on Node 20/22/24, then a pack-and-install smoke test);
-`.github/workflows/release.yml` runs **only when a GitHub Release is published** and does the npm
-publish. Merging to `main` never publishes anything.
+`.github/workflows/release.yml` runs **when a GitHub Release is created as a draft** and does the
+npm publish, then publishes the Release itself as its last step. Merging to `main` never publishes
+anything.
+
+GitHub's [immutable releases](https://github.blog/changelog/2025-10-28-immutable-releases-are-now-generally-available/)
+lock a release's assets the instant it's published, so the tarball has to be attached *before*
+publish — hence drafting first rather than publishing directly.
 
 ### Cutting a release
 
 1. **Bump the version in a PR.** Edit `version` in `package.json` following
    [semver](https://semver.org/) — `npm version --no-git-tag-version <patch|minor|major>` does it —
    and merge once CI is green. Nothing publishes yet.
-2. **Draft the Release.** Repo **Releases → Draft a new release**:
-   - **Choose a tag** → type a new tag `vX.Y.Z` matching the version you just merged (the leading
-     `v` is expected; the workflow strips it) → **Create new tag on publish**.
+2. **Tag the merged commit and push the tag.** On an up-to-date `main`:
+   `git tag vX.Y.Z && git push origin vX.Y.Z` (leading `v`, matching `package.json`; the workflow
+   strips it). The tag must exist in git *before* drafting the release below — a draft release's
+   "create new tag on publish" defers tag creation until publish, which is too late for a
+   pre-publish job to check out.
+3. **Draft the Release.** Repo **Releases → Draft a new release**:
+   - **Choose a tag** → pick the **existing** tag `vX.Y.Z` you just pushed (do not create a new tag
+     here).
    - **Target**: `main`.
    - **Generate release notes** to populate the body from merged PRs.
    - For a prerelease (`vX.Y.Z-rc.1`, etc.), tick **Set as a pre-release**.
-3. **Publish release.** This triggers `release.yml`, which fails fast unless the tag matches
-   `package.json`, then re-runs the full suite, packs and smoke-tests the tarball, publishes to npm
-   via OIDC, and attaches the `.tgz` to the Release. A normal release goes to the `latest` dist-tag;
-   a prerelease goes to `next`, so `npm install -g claude-modules` never picks it up.
-4. **Approve and verify.** If the `release` environment requires a reviewer, approve the run in the
+   - **Save as draft** — do **not** click "Publish release". Saving as a draft is what triggers
+     `release.yml`; publishing directly would make the Release immutable before the workflow can
+     attach the tarball.
+4. **Let the workflow run.** It fails fast unless the tag matches `package.json`, re-runs the full
+   suite, packs and smoke-tests the tarball, attaches the `.tgz` to the still-draft Release,
+   publishes to npm via OIDC, and only then publishes the Release itself (making it live and
+   immutable). A normal release goes to the `latest` dist-tag; a prerelease goes to `next`, so
+   `npm install -g claude-modules` never picks it up.
+5. **Approve and verify.** If the `release` environment requires a reviewer, approve the run in the
    **Actions** tab. Then confirm the new version and its provenance badge on
    [npmjs.com](https://www.npmjs.com/package/claude-modules) (`npm audit signatures` after
    installing also verifies it).

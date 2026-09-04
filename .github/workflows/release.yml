@@ -1,10 +1,15 @@
 name: Release
 
-# Runs only when a GitHub Release is published (Releases -> Draft a new release -> Publish).
+# Runs when a Release is created as a DRAFT (Releases -> Draft a new release -> Save draft,
+# NOT Publish). The job builds, tests, attaches the tarball, publishes to npm, and only then
+# publishes the Release itself as the last step. Publishing directly from the UI skips straight
+# to an immutable Release, before this job gets a chance to attach the tarball (GitHub rejects
+# asset uploads to immutable releases with a 422) - the tag must also already exist, since a
+# draft release's not-yet-created tag isn't checkout-able until publish.
 # Merging to main never triggers this.
 on:
   release:
-    types: [published]
+    types: [created]
 
 permissions:
   contents: write # attach the packed .tgz to the Release
@@ -21,6 +26,13 @@ jobs:
     env:
       TAG: ${{ github.event.release.tag_name }}
     steps:
+      - name: Verify the Release is still a draft
+        run: |
+          if [ "${{ github.event.release.draft }}" != "true" ]; then
+            echo "::error::This workflow expects the Release to be created as a DRAFT (Releases -> Draft a new release -> Save draft, not Publish). A published release becomes immutable immediately, before this job can attach the tarball. Delete this release, create the tag if needed, and re-draft it."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name }}
@@ -68,13 +80,21 @@ jobs:
           [ "$expected" = "$actual" ] || { echo "::error::version mismatch in packed CLI"; exit 1; }
           claude-modules --help > /dev/null
 
-      - name: Attach the tarball to the Release
+      - name: Attach the tarball to the (still-draft) Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TAG" claude-modules-*.tgz --clobber
 
-      # Last step: npm publish is irreversible, so every failure before this point is a clean re-run.
+      # npm publish is irreversible, so every failure before this point is a clean re-run and the
+      # Release stays a draft (not visible, nothing to undo).
       - name: Publish to npm (Trusted Publishing / OIDC)
         run: |
           cat ~/.npmrc 2>/dev/null || echo "no user .npmrc (expected)"
           npm publish ${{ github.event.release.prerelease && '--tag next' || '' }}
+
+      # Last step: only now does the Release go live (and become immutable), and only after the
+      # tarball is attached and npm publish has already succeeded.
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "$TAG" --draft=false
