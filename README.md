@@ -254,8 +254,8 @@ detect drift. One per scope:
 
 ## Commands
 
-| Command                                   | What it does                                                       |                                                 |
-| ----------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- | --------------------------------------- |
+| Command                                   | What it does                                                       |                                                  |
+| ------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------ |
 | `list`                                    | List every module with its plugin and marketplace counts           | [docs](docs/modules.md#list)                    |
 | `info <module>`                           | Show one module's plugins, marketplaces, and composition           | [docs](docs/modules.md#info)                    |
 | `create <module>`                         | Create a module — empty, seeded from a scope, or composing others  | [docs](docs/modules.md#create)                  |
@@ -275,7 +275,7 @@ detect drift. One per scope:
 | `status`                                  | Audit a scope; exit-coded for CI                                   | [docs](docs/status.md#status)                   |
 | `export <module>`                         | Pack a module and its composition chain into a `.tar.gz`           | [docs](docs/transfer.md#export)                 |
 | `import <archive>`                        | Unpack one on another machine                                      | [docs](docs/transfer.md#import)                 |
-| `completions <bash                        | zsh>`                                                              | Print a tab-completion script for your shell    | [docs](docs/completions.md#completions) |
+| `completions <bash\|zsh>`                  | Print a tab-completion script for your shell                       | [docs](docs/completions.md#completions)          |
 
 ### Global options
 
