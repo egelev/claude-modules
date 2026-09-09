@@ -1,0 +1,47 @@
+<!--
+  Hand-authored. NOT generated from docs/ — this content mirrors the README's
+  "Installation" and "Configuration" sections. Keep it in sync with the README.
+-->
+<div class="docs-intro">
+  <span class="eyebrow">Documentation</span>
+  <h1>Every command, every flag, every caveat.</h1>
+  <p class="docs-lede">
+    This page is generated from the project's
+    <a href="https://github.com/egelev/claude-modules/tree/main/docs"><code>docs/</code></a>
+    folder. New to the tool? Start with the
+    <a href="index.html">overview and quick start</a> instead — come back here for the full
+    reference.
+  </p>
+</div>
+
+<h2 id="installation">Installation</h2>
+<div class="code-block">
+  <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+  <pre><code>npm install -g claude-modules      <span class="tok-comment"># global CLI</span></code></pre>
+</div>
+<p>Or run it without installing: <code>npx claude-modules --help</code>.</p>
+<p>
+  Building from source and configuring <code>CLAUDE_MODULES_HOME</code> are covered in
+  <a href="https://github.com/egelev/claude-modules#installation">the README</a>.
+</p>
+
+<h2 id="configuration">Configuration</h2>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Variable</th><th>Default</th><th>What it points at</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>CLAUDE_MODULES_HOME</code></td>
+        <td><code>~/.claude-modules</code></td>
+        <td>Where your modules and the marketplace registry live</td>
+      </tr>
+      <tr>
+        <td><code>CLAUDE_CONFIG_DIR</code></td>
+        <td><code>~/.claude</code></td>
+        <td>Claude Code's own home — read for the <code>user</code> scope and its plugin caches</td>
+      </tr>
+    </tbody>
+  </table>
+</div>

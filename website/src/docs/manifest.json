@@ -1,0 +1,22 @@
+{
+  "readmeUrl": "https://github.com/egelev/claude-modules",
+
+  "//": "Order of the documentation page. `source` is a file in the repo-root docs/ folder, or @intro / @appendix for the hand-authored partials in this directory. `group` is the TOC heading a section sits under; consecutive sections with the same group merge. `deep: true` also lists h3s in the TOC.",
+
+  "sections": [
+    { "group": "Getting started", "source": "@intro" },
+    { "group": "Concepts", "source": "concepts.md" },
+    { "group": "Managing modules", "source": "modules.md" },
+    { "group": "Composing modules", "source": "compose.md" },
+    { "group": "Plugins", "source": "plugins.md" },
+    { "group": "Marketplaces", "source": "marketplaces.md" },
+    { "group": "Applying to a scope", "source": "applying.md" },
+    { "group": "Auditing", "source": "status.md" },
+    { "group": "Moving between machines", "source": "transfer.md" },
+    { "group": "Reference", "source": "completions.md" },
+    { "group": "Reference", "source": "@appendix" }
+  ],
+
+  "//aliases": "Map a GitHub-style heading slug to a different id to emit / link to. Empty today; heading slugs keep a leading `--` so flag sections (`### `--only``) don't collide with command sections.",
+  "slugAliases": {}
+}

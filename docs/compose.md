@@ -26,10 +26,11 @@ claude-modules compose add frontend base shared-tools
 Every future `enable` / `disable` / `status` / `export` against `<module>` transitively pulls in
 whatever the newly-composed module(s) contribute.
 
-**Validated atomically.** A self-reference, a composition cycle, a missing composed module, or a
-sibling marketplace conflict rejects the *entire* call — nothing is written, even if some of the
-named modules would have been fine on their own. This is the same validation `create --compose`
-runs.
+> [!WARNING]
+> **Validated atomically.** A self-reference, a composition cycle, a missing composed module, or a
+> sibling marketplace conflict rejects the *entire* call — nothing is written, even if some of the
+> named modules would have been fine on their own. This is the same validation `create --compose`
+> runs.
 
 **Idempotent per name.** A composed module already present is skipped and noted in the output. If
 every named module is already composed, this is a no-op that logs a warning rather than failing.

@@ -58,8 +58,9 @@ error** — the registry write above still succeeds either way.
 A local path ending in `marketplace.json` infers its name from the parent directory; a trailing `/`
 or `.git` is stripped.
 
-**`owner/repo#ref` is an error**, not a silent misparse — GitHub shorthand doesn't support `#ref`
-pinning. The message steers you to `owner/repo@ref` or the full git URL.
+> [!WARNING]
+> **`owner/repo#ref` is an error**, not a silent misparse — GitHub shorthand doesn't support `#ref`
+> pinning. The message steers you to `owner/repo@ref` or the full git URL.
 
 > **Caveat.** Only the GitHub shorthand has a documented `settings.json` representation. The git-URL
 > and local-path shapes this tool writes are **unverified against real Claude Code output**. Check

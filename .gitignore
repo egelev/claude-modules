@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+website/_site/
 
 # Artifacts written into the repo root when you run the CLI against this
 # checkout: `npm run dev` sets CLAUDE_MODULES_HOME=., and `local` scope

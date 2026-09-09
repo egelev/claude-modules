@@ -1,0 +1,396 @@
+<!--meta
+{
+  "title": "claude-modules — composable plugin bundles for Claude Code",
+  "description": "claude-modules bundles Claude Code plugins into named, composable modules you can enable, share, and move between machines with one command.",
+  "path": ""
+}
+-->
+  <main id="main">
+    <!-- ============ HERO ============ -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <span class="eyebrow">For Claude Code</span>
+          <h1>Composable, portable plugin bundles for Claude Code.</h1>
+          <p class="hero-sub">
+            Claude Code enables plugins one at a time, per scope, across three separate
+            <code>settings.json</code> files. <strong>claude-modules</strong> lets you bundle them into
+            named modules and switch between them with a single command.
+          </p>
+          <div class="btn-row">
+            <a class="btn btn-primary" href="#install">Get started</a>
+            <a class="btn" href="docs.html">Read the docs</a>
+          </div>
+          <div class="badge-row">
+            <img src="https://img.shields.io/npm/v/claude-modules" alt="npm version" />
+            <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license: MIT" />
+            <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="node >= 20" />
+          </div>
+        </div>
+        <div>
+          <div class="code-block">
+            <div class="code-block-head">
+              <span>terminal</span>
+              <button class="copy-btn" type="button">Copy</button>
+            </div>
+            <pre><code><span class="tok-comment"># A base layer every stack builds on</span>
+claude-modules create base-dev
+claude-modules plugin install base-dev context7@claude-plugins-official
+
+<span class="tok-comment"># A frontend-specific module</span>
+claude-modules create fe
+claude-modules plugin install fe playwright@claude-plugins-official
+
+<span class="tok-comment"># Compose them into one role, declared once</span>
+claude-modules create full-dev --compose base-dev --compose fe
+claude-modules enable full-dev --scope project --save</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ WHAT IT IS ============ -->
+    <section id="what">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">What it is</span>
+          <h2>A module is a named bundle of plugins — and everything they need to work anywhere.</h2>
+          <p>
+            Instead of enabling plugins one by one, you group them into a module once. Every module is:
+          </p>
+        </div>
+        <div class="card-grid">
+          <div class="card feature-card">
+            <div class="icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" />
+                <rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" />
+                <rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" />
+                <rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2" />
+              </svg>
+            </div>
+            <h3>Self-sufficient</h3>
+            <p>Carries its plugins <em>and</em> the marketplaces they come from, so it works on a machine that's never seen them.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="2" />
+                <circle cx="17" cy="7" r="3" stroke="currentColor" stroke-width="2" />
+                <circle cx="12" cy="18" r="3" stroke="currentColor" stroke-width="2" />
+                <path d="M9 9.5L10.5 15.5M15 9.5L13.5 15.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </div>
+            <h3>Composable</h3>
+            <p><code>fullstack</code> = <code>backend</code> + <code>frontend</code>, declared once and resolved every time, not retyped.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <path d="M12 3v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <path d="M7 11l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M4 18v2a1 1 0 001 1h14a1 1 0 001-1v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </div>
+            <h3>Reusable</h3>
+            <p>The same module applies to any repo, at any scope — write it once, enable it everywhere.</p>
+          </div>
+          <div class="card feature-card">
+            <div class="icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <rect x="3" y="7" width="7" height="10" rx="1.5" stroke="currentColor" stroke-width="2" />
+                <rect x="14" y="7" width="7" height="10" rx="1.5" stroke="currentColor" stroke-width="2" />
+                <path d="M10 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                <path d="M12 10l2 2-2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <h3>Transferable</h3>
+            <p><code>export</code> packs a module and its whole composition chain into one <code>.tar.gz</code>; <code>import</code> unpacks it elsewhere.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ WHY NOT /plugin ============ -->
+    <section id="why" class="section-alt">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Why not just <code>/plugin</code>?</span>
+          <h2>Claude Code manages plugins one at a time. This manages roles.</h2>
+        </div>
+        <div class="table-wrap compare">
+          <table>
+            <thead>
+              <tr>
+                <th>&nbsp;</th>
+                <th>
+                  Claude Code <code>/plugin</code>
+                  <span class="th-sub">manages one plugin at a time</span>
+                </th>
+                <th>
+                  claude-modules
+                  <span class="th-sub">manages bundles you compose into roles</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Unit of work</td><td>one plugin at a time</td><td>a named bundle of plugins</td></tr>
+              <tr><td>Grouping</td><td>none — <code>enabledPlugins</code> is a flat map</td><td>modules, which compose into bigger modules</td></tr>
+              <tr><td>Reuse across repos</td><td>re-enable each plugin, per repo</td><td><code>enable backend</code></td></tr>
+              <tr><td>Another machine</td><td>re-add marketplaces, re-enable plugins</td><td><code>export</code> → <code>import</code>, one file</td></tr>
+              <tr><td>Switching roles</td><td>hand-edit up to three <code>settings.json</code> files</td><td><code>enable backend --only</code></td></tr>
+              <tr><td>Auditing what's on</td><td>read three files and apply precedence in your head</td><td><code>status</code> — exit-coded, <code>--json</code></td></tr>
+              <tr><td>Sharing with a team</td><td>commit <code>.claude/settings.json</code> wholesale</td><td>commit <code>.claude-modules</code>, then <code>reload</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="section-note u-measure-wide">
+          There's a secondary benefit too: every enabled plugin adds tools Claude has to choose between
+          on every turn, and
+          <a href="https://code.claude.com/docs/en/agent-sdk/tool-search">Claude's own docs</a>
+          note that tool-selection accuracy degrades past 30–50 loaded tools. Scoping your tools to the
+          role you're currently performing helps — see
+          <a href="docs.html#context-budget">the caveat for MCP-heavy plugins</a> in the docs.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ INSTALL / QUICK START ============ -->
+    <section id="install">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Setup</span>
+          <h2>Install it, then capture what you already have.</h2>
+          <p>Node 20+ is the only requirement.</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-block-head">
+            <span>install</span>
+            <button class="copy-btn" type="button">Copy</button>
+          </div>
+          <pre><code>npm install -g claude-modules      <span class="tok-comment"># global CLI</span></code></pre>
+        </div>
+        <p>Or run it without installing: <code>npx claude-modules --help</code></p>
+        <p>See <a href="docs.html#installation">Installation</a> in the docs for building from source and configuring <code>CLAUDE_MODULES_HOME</code>.</p>
+      </div>
+    </section>
+
+    <!-- ============ EXAMPLE WORKFLOW (recommended) ============ -->
+    <section id="example" class="section-alt">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Recommended workflow</span>
+          <h2>Build modules plugin by plugin, then compose them into the role you switch into.</h2>
+          <p>
+            This is the way to build a module: one <code>plugin install</code> at a time, one concern
+            per module, composed together deliberately. Starting from an empty module keeps each one
+            scoped to a single concern and easy to compose later — if you'd rather capture a scope
+            you've already configured by hand instead, that's a fallback, covered
+            <a href="#from-existing">below</a>.
+          </p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+          <pre><code><span class="tok-comment"># A base layer every stack builds on</span>
+claude-modules create base-dev
+claude-modules plugin install base-dev context7@claude-plugins-official
+claude-modules plugin install base-dev code-simplifier@claude-plugins-official
+
+<span class="tok-comment"># A Quarkus-specific module</span>
+claude-modules create quarkus
+claude-modules plugin install quarkus jdtls-lsp@claude-plugins-official
+claude-modules plugin install quarkus quarkus-agent@claude-plugins-official
+
+<span class="tok-comment"># A frontend-specific module</span>
+claude-modules create fe
+claude-modules plugin install fe modern-web-guidance@claude-plugins-official
+claude-modules plugin install fe playwright@claude-plugins-official
+claude-modules plugin install fe typescript-lsp@claude-plugins-official
+claude-modules plugin install fe frontend-design@claude-plugins-official
+
+<span class="tok-comment"># Compose them into one role, declared once</span>
+claude-modules create full-dev --compose base-dev --compose quarkus --compose fe
+claude-modules enable full-dev --scope project --save   <span class="tok-comment"># transitively pulls in all three, every time</span></code></pre>
+        </div>
+
+        <p>
+          Don't need <code>full-dev</code> as a permanent unit? Name the modules directly on one
+          <code>enable</code> call instead — an ad-hoc union, good for one-off combinations you won't
+          reuse:
+        </p>
+        <div class="code-block">
+          <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+          <pre><code>claude-modules enable base-dev quarkus fe --save</code></pre>
+        </div>
+
+        <p>
+          And when you're switching roles rather than layering on top of what's active, add
+          <code>--only</code> to make the scope <em>exactly</em> the given modules:
+        </p>
+        <div class="code-block">
+          <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+          <pre><code>claude-modules enable full-dev --scope user --only --save
+claude-modules enable base-dev --scope user --only          <span class="tok-comment"># Monday: quarkus/fe plugins go quiet</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FALLBACK: CAPTURE AN EXISTING SETUP ============ -->
+    <section id="from-existing">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Fallback path</span>
+          <h2>Already configured a repo by hand, or through <code>/plugin</code>? Capture it instead.</h2>
+          <p>
+            <code>create --from-scope</code> captures what's already enabled in one shot, without
+            retyping every <code>plugin install</code>. It's a shortcut, not the recommended way to
+            build a module — a scope tends to accumulate plugins for whatever you were doing at the
+            time, so it can just as easily capture a bundle mixing unrelated concerns as a clean one.
+            Reach for <a href="#example">the recommended workflow above</a> when you're starting fresh.
+          </p>
+        </div>
+
+        <div class="steps">
+          <div class="step">
+            <div class="step-num"></div>
+            <div>
+              <h3>Capture what's already enabled</h3>
+              <div class="code-block">
+                <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+                <pre><code>cd ~/projects/api-service
+claude-modules create backend --from-scope local</code></pre>
+              </div>
+              <div class="code-block">
+                <div class="code-block-head"><span>output</span><button class="copy-btn" type="button">Copy</button></div>
+                <pre><code><span class="tok-out">Created module 'backend' from local scope (/repo/.claude/settings.local.json) with 3 plugin(s), 1 marketplace(s), and 0 composed module(s).</span></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num"></div>
+            <div>
+              <h3>Check what it captured</h3>
+              <div class="code-block">
+                <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+                <pre><code>claude-modules list
+claude-modules info backend</code></pre>
+              </div>
+              <div class="code-block">
+                <div class="code-block-head"><span>output</span><button class="copy-btn" type="button">Copy</button></div>
+                <pre><code><span class="tok-out">backend (v1.0.0): 3 plugin(s):
+  typescript-lsp@claude-plugins (enabled)
+  postgres-mcp@claude-plugins (enabled)
+  code-review@claude-plugins (enabled)</span></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num"></div>
+            <div>
+              <h3>Apply it — shared with the team</h3>
+              <p>
+                Here to <code>project</code> scope, so it's shared with the team, and <code>--save</code>
+                so you don't have to retype it:
+              </p>
+              <div class="code-block">
+                <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
+                <pre><code>claude-modules enable backend --scope project --save</code></pre>
+              </div>
+              <div class="callout callout-warn">
+                <p>
+                  <strong>Changes apply to the next session.</strong> Claude Code reads
+                  <code>enabledPlugins</code> at session start. Run <code>/reload-plugins</code> in an
+                  already-open session, or start a new one.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-num"></div>
+            <div>
+              <h3>Audit it any time</h3>
+              <p>
+                <code>claude-modules status</code> checks the scope against Claude Code's own plugin
+                cache and the saved module list, and exits non-zero if something has drifted — see
+                <a href="docs.html#status">the docs</a>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COMMAND REFERENCE TEASER ============ -->
+    <section id="commands" class="section-alt">
+      <div class="container">
+        <div class="section-head">
+          <span class="eyebrow">Every command</span>
+          <h2>Fifteen commands cover building, applying, auditing, and moving modules.</h2>
+          <p>Full option tables and every caveat live in the docs — this is the map.</p>
+        </div>
+        <div class="table-wrap compact">
+          <table>
+            <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td><a href="docs.html#list"><code>list</code></a></td><td>List every module with its plugin and marketplace counts</td></tr>
+              <tr><td><a href="docs.html#info"><code>info &lt;module&gt;</code></a></td><td>Show one module's plugins, marketplaces, and composition</td></tr>
+              <tr><td><a href="docs.html#create"><code>create &lt;module&gt;</code></a></td><td>Create a module — empty, seeded from a scope, or composing others</td></tr>
+              <tr><td><a href="docs.html#remove"><code>remove &lt;module&gt;</code></a></td><td>Delete a module</td></tr>
+              <tr><td><a href="docs.html#compose-add"><code>compose add</code></a></td><td>Make a module build on others</td></tr>
+              <tr><td><a href="docs.html#compose-remove"><code>compose remove</code></a></td><td>Stop building on others</td></tr>
+              <tr><td><a href="docs.html#plugin-install"><code>plugin install</code></a></td><td>Enable a plugin inside a module</td></tr>
+              <tr><td><a href="docs.html#plugin-uninstall"><code>plugin uninstall</code></a></td><td>Disable a plugin inside a module</td></tr>
+              <tr><td><a href="docs.html#marketplace-add"><code>marketplace add</code></a></td><td>Register a marketplace, globally or on a module</td></tr>
+              <tr><td><a href="docs.html#marketplace-remove"><code>marketplace remove</code></a></td><td>Unregister a marketplace</td></tr>
+              <tr><td><a href="docs.html#marketplace-list"><code>marketplace list</code></a></td><td>List registered marketplaces</td></tr>
+              <tr><td><a href="docs.html#enable"><code>enable &lt;module...&gt;</code></a></td><td>Apply modules to a scope</td></tr>
+              <tr><td><a href="docs.html#disable"><code>disable &lt;module...&gt;</code></a></td><td>Turn a scope's copy of those plugins off</td></tr>
+              <tr><td><a href="docs.html#disable-all"><code>disable-all</code></a></td><td>Turn every plugin in a scope off</td></tr>
+              <tr><td><a href="docs.html#reload"><code>reload</code></a></td><td>Re-apply a scope's saved module list</td></tr>
+              <tr><td><a href="docs.html#update"><code>update [module...]</code></a></td><td>Update modules' marketplaces then plugins to latest</td></tr>
+              <tr><td><a href="docs.html#status"><code>status</code></a></td><td>Audit a scope; exit-coded for CI</td></tr>
+              <tr><td><a href="docs.html#export"><code>export &lt;module&gt;</code></a></td><td>Pack a module and its composition chain into a <code>.tar.gz</code></td></tr>
+              <tr><td><a href="docs.html#import"><code>import &lt;archive&gt;</code></a></td><td>Unpack one on another machine</td></tr>
+              <tr><td><a href="docs.html#completions"><code>completions bash|zsh</code></a></td><td>Print a tab-completion script for your shell</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="btn-row u-mt-8">
+          <a class="btn btn-primary" href="docs.html">Open full documentation</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LIMITATIONS ============ -->
+    <section id="limitations">
+      <div class="container container-narrow">
+        <div class="section-head">
+          <span class="eyebrow">Known limitations</span>
+          <h2>Stated honestly, not buried.</h2>
+        </div>
+        <div class="card-grid card-grid--single">
+          <div class="card">
+            <p><strong>No token-cost preview.</strong> Modules report plugin counts, not tokens — Claude Code has no way to aggregate that per module yet.</p>
+          </div>
+          <div class="card">
+            <p><strong>No version pinning.</strong> A module records which plugins to enable, not which versions. Treat modules as portable role definitions, not lockfiles.</p>
+          </div>
+          <div class="card">
+            <p><strong>Marketplace sources are snapshots.</strong> Resolved sources are copied onto the module; later registry changes don't propagate.</p>
+          </div>
+          <div class="card">
+            <p><strong>Plugin configuration isn't captured.</strong> Per-plugin <code>userConfig</code> is deliberately excluded so a committed module can't become a secret-exfiltration path.</p>
+          </div>
+          <div class="card">
+            <p><strong>Composition overrides stop after one level.</strong> An explicit <code>false</code> beats a directly composed child, but not a grandchild.</p>
+          </div>
+        </div>
+        <p class="section-note">See <a href="docs.html#known-limitations">the docs</a> for the full explanation of each.</p>
+      </div>
+    </section>
+  </main>

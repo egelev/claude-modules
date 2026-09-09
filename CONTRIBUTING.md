@@ -31,6 +31,33 @@ against stale types.
 Commit messages: `feat:` / `fix:` / `docs:` / `chore:` prefixes are preferred — the history uses
 them and they make the generated release notes readable — but they are not enforced.
 
+## Website
+
+The site in [`website/`](website/) is a zero-dependency static build:
+`node website/build.mjs` renders `website/_site/`.
+
+- **`docs.html` is generated from [`docs/`](docs/)** — edit the Markdown there, never the HTML.
+  Page order and TOC grouping live in
+  [`website/src/docs/manifest.json`](website/src/docs/manifest.json).
+- Callout boxes come from GitHub alert blockquotes in the Markdown: `> [!WARNING]` renders as a
+  warning, any other `> …` blockquote as a plain note.
+- **Installation, Configuration, Global options and Known limitations are _not_ in `docs/`** —
+  they're hand-authored in `website/src/docs/intro.html` / `appendix.html` and **must be kept in
+  sync with the README** by hand.
+- The landing page is `website/src/pages/index.html`; the shared header/footer are
+  `website/src/partials/`. See [`website/README.md`](website/README.md) for the full model.
+
+Preview locally:
+
+```bash
+node website/build.mjs
+python3 -m http.server -d website/_site 8000  # → http://localhost:8000
+```
+
+Merging a change under `website/**` or `docs/**` to `main` **publishes automatically** to GitHub
+Pages (<https://egelev.github.io/claude-modules/>) via
+[`pages.yml`](.github/workflows/pages.yml) — no release or manual step.
+
 ## Releasing (maintainers)
 
 Releases are separate from merges — nothing ships automatically. Bump `version` in `package.json`

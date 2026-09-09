@@ -1,0 +1,66 @@
+<!--
+  Hand-authored. NOT generated from docs/ — "Global options" mirrors the README,
+  "Known limitations" aggregates caveats detailed in the generated sections above.
+  Keep in sync with the README.
+-->
+<h2 id="global-options">Global options</h2>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Flag</th><th>Effect</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>-h</code>, <code>--help</code></td>
+        <td>Show help. Works after any command: <code>claude-modules plugin install --help</code></td>
+      </tr>
+      <tr><td><code>-v</code>, <code>--version</code></td><td>Print the installed version</td></tr>
+      <tr><td><code>--verbose</code></td><td>Enable debug logging</td></tr>
+      <tr>
+        <td><code>--dry-run</code></td>
+        <td>Preview a mutating command's effect — writes nothing, runs no external commands</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<p>
+  <code>--dry-run</code> is supported by all 15 mutating commands, and is a no-op on the five that
+  never write (<code>list</code>, <code>info</code>, <code>status</code>,
+  <code>marketplace list</code>, <code>completions</code>). Running a bare group name —
+  <code>claude-modules plugin</code>, <code>marketplace</code>, or <code>compose</code> — prints
+  that group's usage.
+</p>
+
+<h2 id="known-limitations">Known limitations</h2>
+<ul>
+  <li>
+    <strong>No token-cost preview.</strong> Modules report plugin <em>counts</em>, not tokens.
+    Claude Code knows the number, but there's no way to aggregate it per module yet. See
+    <a href="#context-budget">Context budget</a>.
+  </li>
+  <li>
+    <strong>No version pinning.</strong> A module records which plugins to enable, not which
+    versions. Treat modules as portable role definitions, not lockfiles.
+  </li>
+  <li>
+    <strong>Marketplace sources are snapshots.</strong> Resolved sources are copied onto the
+    module; later registry changes don't propagate.
+  </li>
+  <li>
+    <strong>Plugin configuration isn't captured.</strong> Per-plugin <code>userConfig</code> is
+    deliberately excluded so a committed module can't become a secret-exfiltration path.
+  </li>
+  <li>
+    <strong>Composition overrides stop after one level.</strong> An explicit <code>false</code>
+    beats a directly composed child, but not a grandchild. See
+    <a href="#the-one-level-override-limit">the one-level override limit</a>.
+  </li>
+</ul>
+
+<hr class="rule" />
+<p class="u-text-sm">
+  This page is generated from
+  <a href="https://github.com/egelev/claude-modules/tree/main/docs">the project's <code>docs/</code> folder</a>
+  and the <a href="https://github.com/egelev/claude-modules#readme">README</a>. Found a mismatch?
+  <a href="https://github.com/egelev/claude-modules/issues">Open an issue</a>.
+</p>
