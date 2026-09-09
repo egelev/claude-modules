@@ -1,0 +1,20 @@
+<!--meta
+{
+  "title": "Documentation — claude-modules",
+  "description": "Full reference for claude-modules: every command, every flag, every caveat.",
+  "path": "docs.html"
+}
+-->
+<!--
+  The documentation body is generated at build time from the repo-root docs/*.md
+  files (plus src/docs/intro.html and src/docs/appendix.html). Order, TOC groups
+  and slug aliases live in src/docs/manifest.json. See website/lib/docs-page.mjs.
+-->
+  <main id="main">
+    <div class="container">
+      <div class="docs-shell">
+      {{docs_toc}}
+      {{docs_content}}
+      </div>
+    </div>
+  </main>

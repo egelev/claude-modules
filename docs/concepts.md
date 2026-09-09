@@ -107,8 +107,9 @@ Claude Code resolves `enabledPlugins` with **`local` > `project` > `user`**. `cl
 the same order, which is why its reports annotate an entry `(<scope> — overridden by <scope>)` when
 a more-specific scope explicitly disables it.
 
-**Managed settings outrank all three** and can force a plugin on or off. That is invisible to this
-tool — [`status --verify`](status.md#status) exists to catch it.
+> [!WARNING]
+> **Managed settings outrank all three** and can force a plugin on or off. That is invisible to this
+> tool — [`status --verify`](status.md#status) exists to catch it.
 
 ### What gets written
 

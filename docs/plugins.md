@@ -115,6 +115,7 @@ The only true no-op is a plugin that's already explicitly `false`.
 
 Also bumps the **minor** version.
 
+> [!WARNING]
 > **The override only survives one level of composition.** See
 > [the one-level override limit](compose.md#the-one-level-override-limit).
 

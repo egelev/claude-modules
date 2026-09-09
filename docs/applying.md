@@ -7,6 +7,7 @@ to, see [Concepts → Scopes](concepts.md#scopes).
 
 [← back to README](../README.md)
 
+> [!WARNING]
 > **Changes apply to the *next* session.** Claude Code reads `enabledPlugins` at session start, so
 > these commands have no effect on a session that's already open — which looks exactly like the
 > command having done nothing. Run `/reload-plugins` in that session (add `--force` if it warns
@@ -121,8 +122,9 @@ across scopes.
 
 **Off by default**: a plain `enable` never shells out to `claude`; it only reports what's missing.
 
-If a marketplace or plugin is still missing after the attempt, `enable` **exits with code 2** —
-unless `--dry-run` was also given, in which case nothing was attempted and the exit code stays 0.
+> [!WARNING]
+> If a marketplace or plugin is still missing after the attempt, `enable` **exits with code 2** —
+> unless `--dry-run` was also given, in which case nothing was attempted and the exit code stays 0.
 
 ### `--save`
 
@@ -163,9 +165,10 @@ claude-modules disable backend --save
 - Marketplaces and every other setting in the file are untouched.
 - A module that enables no plugins is a no-op that logs a warning rather than failing.
 
-`--save` removes the given modules from the scope's saved list, if one exists. A name not in the
-list, or no list at all, is a no-op with a warning. Unlike `enable --save`, it always targets the
-scope's own canonical list and **does not take a path** — `--save=<path>` is an explicit error.
+> [!WARNING]
+> `--save` removes the given modules from the scope's saved list, if one exists. A name not in the
+> list, or no list at all, is a no-op with a warning. Unlike `enable --save`, it always targets the
+> scope's own canonical list and **does not take a path** — `--save=<path>` is an explicit error.
 
 Afterward it prints the same report `enable` does, plus the `Modules active in <scope> scope:` line.
 
@@ -218,6 +221,7 @@ claude-modules reload --install
 If a listed module no longer exists, the error names the specific list file the stale name came
 from.
 
+> [!WARNING]
 > **Behavior change.** `reload` used to attempt the caching step unconditionally, with no way to
 > turn it off. It now defaults to **off** and only attempts it when `--install` is passed, for
 > symmetry with `enable`. If you relied on `reload` silently re-caching plugins, add `--install`.
