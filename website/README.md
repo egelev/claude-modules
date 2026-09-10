@@ -37,10 +37,17 @@ Each page in `src/pages/` starts with a metadata block that feeds the layout:
 {
   "title":       "Page title — used in <title>, og:title, twitter:title",
   "description": "Meta description — used in description, og:description, …",
-  "path":        "docs.html"   /* appended to the site origin for canonical + og:url; "" for the home page */
+  "path":        "docs.html",  /* appended to the site origin for canonical + og:url; "" for the home page */
+  "noindex":     true          /* optional — emits <meta name="robots" content="noindex"> and drops the page from sitemap.xml */
 }
 -->
 ```
+
+`build.mjs` also emits, from the same page list:
+
+- `_site/robots.txt` — allows everything, points crawlers at the sitemap
+- `_site/sitemap.xml` — one `<loc>` per indexable page (`noindex` pages excluded), `<lastmod>` = build date
+- a `schema.org` JSON-LD block in every page's `<head>` (`WebSite` + `WebPage`, plus `SoftwareApplication` on the home page)
 
 ## The documentation page is generated
 
