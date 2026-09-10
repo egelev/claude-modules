@@ -59,6 +59,7 @@ function renderPage(file, layout, partials) {
 
   let content = raw.slice(meta[0].length).trimEnd();
   const canonical = SITE_URL + path;
+  const ogImage = SITE_URL + 'assets/og-cover.png'; // absolute URL required by OG/Twitter
 
   // Pages that opt in get their documentation body generated from docs/*.md.
   if (content.includes('{{docs_content}}')) {
@@ -72,12 +73,47 @@ function renderPage(file, layout, partials) {
     .replaceAll('{{content}}', content)
     .replaceAll('{{title}}', escapeHtml(title))
     .replaceAll('{{description}}', escapeHtml(description))
-    .replaceAll('{{canonical}}', escapeHtml(canonical));
+    .replaceAll('{{canonical}}', escapeHtml(canonical))
+    .replaceAll('{{og_image}}', escapeHtml(ogImage))
+    // Absolute site root — 404.html can't use relative links (the browser keeps
+    // the unknown URL, so `docs.html` would resolve against the wrong path).
+    .replaceAll('{{site_url}}', escapeHtml(SITE_URL));
 
   const leftover = /{{\s*[\w-]+\s*}}/.exec(html);
   if (leftover) throw new Error(`${file}: unresolved placeholder ${leftover[0]}`);
 
   return html + '\n';
+}
+
+/**
+ * Every `href="<page>.html#id"` that targets another built page must resolve to a
+ * real id on that page. buildDocsPage() already checks anchors within docs.html;
+ * this catches the ~two dozen index.html -> docs.html# links (and the shared
+ * header's index.html# links) that nothing else validates. Sets a failing exit
+ * code — the deploy step won't run after a non-zero build.
+ */
+function checkCrossPageAnchors(pages) {
+  const idsByPage = Object.fromEntries(
+    Object.entries(pages).map(([name, html]) => [
+      name,
+      new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1])),
+    ]),
+  );
+
+  const broken = new Set();
+  for (const [from, html] of Object.entries(pages)) {
+    for (const [, target, anchor] of html.matchAll(/href="([\w.-]+\.html)#([^"]+)"/g)) {
+      if (idsByPage[target] && !idsByPage[target].has(anchor)) {
+        broken.add(`${from} -> ${target}#${anchor}`);
+      }
+    }
+  }
+
+  if (broken.size) {
+    console.error(`  links: ${broken.size} broken cross-page anchor(s):`);
+    for (const b of broken) console.error(`          ${b}`);
+    process.exitCode = 1;
+  }
 }
 
 function build() {
@@ -87,10 +123,14 @@ function build() {
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
+  const pages = {};
   for (const file of readdirSync(join(srcDir, 'pages')).filter((f) => f.endsWith('.html'))) {
-    writeFileSync(join(outDir, file), renderPage(file, layout, partials));
+    pages[file] = renderPage(file, layout, partials);
+    writeFileSync(join(outDir, file), pages[file]);
     console.log(`  build   _site/${file}`);
   }
+
+  checkCrossPageAnchors(pages);
 
   cpSync(join(root, 'assets'), join(outDir, 'assets'), { recursive: true });
   cpSync(join(root, 'favicon.svg'), join(outDir, 'favicon.svg'));

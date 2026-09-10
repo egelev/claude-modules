@@ -68,7 +68,8 @@ the single-page site does not. Thematic breaks (`---`) are dropped.
 `docs/`; they live in `src/docs/intro.html` / `appendix.html` and mirror the README —
 keep them in sync by hand.
 
-The build warns if any in-page `#anchor` doesn't resolve to a heading id.
+The build fails if any `#anchor` doesn't resolve — both in-page anchors within
+`docs.html` and the `index.html` → `docs.html#…` cross-page links.
 
 ## Build & preview
 
@@ -101,5 +102,16 @@ cd /tmp/preview && python3 -m http.server 8000
   radii, shadows, z-index and motion are CSS custom properties in the `:root`
   block at the top; add new values there rather than inline)
 - **Behaviour** → `assets/main.js`
+- **Social preview** → edit `assets/og-cover.svg`, then regenerate the PNG the
+  meta tags actually point at (crawlers, X/Twitter especially, don't take SVG):
+
+  ```sh
+  npx @resvg/resvg-js-cli \
+    --font-sans-serif-family Inter --font-monospace-family "JetBrains Mono" \
+    assets/og-cover.svg assets/og-cover.png
+  ```
+
+  Needs Inter + JetBrains Mono installed locally (or pass `--font-file`).
+  `assets/og-cover.png` is committed — the build only copies it.
 
 Rebuild with `node website/build.mjs` after any change.

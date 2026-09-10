@@ -1,0 +1,24 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="claude-modules — composable, portable plugin bundles for Claude Code">
+  <rect width="1200" height="630" fill="#fff7ed"/>
+
+  <!-- sticker card: hard offset shadow + bordered panel, matching the site -->
+  <rect x="56" y="56" width="1088" height="518" rx="24" fill="#f97316"/>
+  <rect x="44" y="44" width="1088" height="518" rx="24" fill="#ffffff" stroke="#18181b" stroke-width="3"/>
+
+  <!-- 2x2 grid mark (same motif as favicon.svg) -->
+  <g transform="translate(0,52)">
+    <rect x="104" y="150" width="200" height="200" rx="44" fill="#f97316" stroke="#18181b" stroke-width="5"/>
+    <rect x="140" y="186" width="52" height="52" rx="12" fill="#18181b"/>
+    <rect x="216" y="186" width="52" height="52" rx="12" fill="#ffffff" stroke="#18181b" stroke-width="4"/>
+    <rect x="140" y="262" width="52" height="52" rx="12" fill="#ffffff" stroke="#18181b" stroke-width="4"/>
+    <rect x="216" y="262" width="52" height="52" rx="12" fill="#18181b"/>
+  </g>
+
+  <g font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" transform="translate(0,12)">
+    <text x="360" y="238" font-size="82" font-weight="800" letter-spacing="-2" fill="#18181b">claude-modules</text>
+    <text x="360" y="312" font-size="34" font-weight="500" fill="#52525b">Composable, portable plugin bundles</text>
+    <text x="360" y="356" font-size="34" font-weight="500" fill="#52525b">for Claude Code.</text>
+    <text x="361" y="446" font-size="23" font-weight="500" fill="#c2410c" font-family="'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace">npm install -g claude-modules</text>
+    <text x="360" y="498" font-size="22" fill="#71717a" font-family="'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace">egelev.github.io/claude-modules</text>
+  </g>
+</svg>

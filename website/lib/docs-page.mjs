@@ -210,12 +210,16 @@ export function buildDocsPage() {
     else tocGroups.push({ group: section.group, entries });
   }
 
+  // Group labels are <p>, not headings: the TOC nav sits before the page's <h1>,
+  // so heading tags here would put ten <h4>s ahead of it in the outline. One
+  // visually-hidden <h2> gives the nav an accessible name in the heading list.
   const toc =
     `<nav class="docs-toc" aria-label="Documentation contents">\n` +
+    `        <h2 class="u-visually-hidden">On this page</h2>\n` +
     tocGroups
       .map(
         (g) =>
-          `        <h4>${escapeHtml(g.group)}</h4>\n        <ul>\n` +
+          `        <p class="docs-toc-group">${escapeHtml(g.group)}</p>\n        <ul>\n` +
           g.entries
             .map((e) => `          <li><a href="#${e.id}">${escapeHtml(e.text)}</a></li>`)
             .join('\n') +
@@ -226,15 +230,19 @@ export function buildDocsPage() {
 
   const content = `<article class="docs-content">\n${parts.join('\n\n')}\n      </article>`;
 
-  // integrity: every in-page #anchor must resolve to an emitted id
+  // integrity: every in-page #anchor (in the body *and* the sidebar TOC) must
+  // resolve to an emitted id. A miss fails the build.
   const ids = new Set([...content.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
   const dangling = [
     ...new Set(
-      [...content.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]).filter((a) => a && !ids.has(a)),
+      [...`${toc}\n${content}`.matchAll(/href="#([^"]+)"/g)]
+        .map((m) => m[1])
+        .filter((a) => a && !ids.has(a)),
     ),
   ];
   if (dangling.length) {
-    console.warn(`  docs: ${dangling.length} unresolved anchor(s) -> ${dangling.join(', ')}`);
+    console.error(`  docs: ${dangling.length} unresolved anchor(s) -> ${dangling.join(', ')}`);
+    process.exitCode = 1;
   }
 
   return { toc, content };

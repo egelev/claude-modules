@@ -75,3 +75,15 @@ jobs:
           mkdir -p "$RUNNER_TEMP/pkg"
           tar -xzf claude-modules-*.tgz -C "$RUNNER_TEMP/pkg" --strip-components=1
           npx --yes publint "$RUNNER_TEMP/pkg"
+
+  website:
+    name: website (build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # Zero-dependency build — no `npm ci`. Fails on a dangling docs anchor or a
+      # broken index.html -> docs.html# link (see website/lib/docs-page.mjs, build.mjs).
+      - run: node website/build.mjs

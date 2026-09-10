@@ -27,20 +27,20 @@ command. Build modules plugin by plugin, then compose them into the role you act
 ```bash
 # A base layer every stack builds on
 claude-modules create base-dev
-claude-modules plugin install base-dev context7@claude-plugins-official
-claude-modules plugin install base-dev code-simplifier@claude-plugins-official
+claude-modules plugin install base-dev context7@claude-plugins
+claude-modules plugin install base-dev code-simplifier@claude-plugins
 
 # A Quarkus-specific module
 claude-modules create quarkus
-claude-modules plugin install quarkus jdtls-lsp@claude-plugins-official
-claude-modules plugin install quarkus quarkus-agent@claude-plugins-official
+claude-modules plugin install quarkus jdtls-lsp@claude-plugins
+claude-modules plugin install quarkus quarkus-agent@claude-plugins
 
 # A frontend-specific module
 claude-modules create fe
-claude-modules plugin install fe modern-web-guidance@claude-plugins-official
-claude-modules plugin install fe playwright@claude-plugins-official
-claude-modules plugin install fe typescript-lsp@claude-plugins-official
-claude-modules plugin install fe frontend-design@claude-plugins-official
+claude-modules plugin install fe modern-web-guidance@claude-plugins
+claude-modules plugin install fe playwright@claude-plugins
+claude-modules plugin install fe typescript-lsp@claude-plugins
+claude-modules plugin install fe frontend-design@claude-plugins
 
 # Compose them into one role, declared once
 claude-modules create full-dev --compose base-dev --compose quarkus --compose fe

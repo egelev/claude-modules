@@ -82,7 +82,9 @@
     const content = document.querySelector('.docs-content');
     if (!toc || !content) return;
 
-    const headings = [...content.querySelectorAll('h2[id], h3[id]')];
+    // Only h2s appear in the sidebar; observing h3s too would blank the whole
+    // sidebar whenever an h3-only stretch of the page is in view.
+    const headings = [...content.querySelectorAll('h2[id]')];
     const links = [...toc.querySelectorAll('a[href^="#"]')];
     if (!headings.length || !links.length) return;
 
@@ -94,10 +96,10 @@
     let current = null;
     const setActive = (id) => {
       if (id === current) return;
+      const active = linkByHref[id];
+      if (!active) return; // no TOC entry for this heading — keep the current one lit
       current = id;
       links.forEach((l) => l.classList.remove('is-active'));
-      const active = linkByHref[id];
-      if (!active) return;
       active.classList.add('is-active');
       // scroll-behavior on .docs-toc (CSS) handles smoothness / reduced-motion.
       const top = active.offsetTop - toc.clientHeight / 2;
