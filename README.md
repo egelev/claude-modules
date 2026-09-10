@@ -2,6 +2,9 @@
 
 **Composable, portable plugin bundles for [Claude Code](https://claude.com/claude-code).**
 
+**[Docs & overview](https://egelev.github.io/claude-modules/)** — full guide, command
+reference, and a plain-English tour of what claude-modules does.
+
 [![npm](https://img.shields.io/npm/v/claude-modules)](https://www.npmjs.com/package/claude-modules)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
