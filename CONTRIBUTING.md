@@ -18,7 +18,7 @@ Tests drive the real `Cli` against throwaway temp directories, with both `CLAUDE
 
 `npm run typecheck` runs `tsc` twice: once for the build config (`src/` only, matching what ships)
 and once for `tsconfig.test.json`, which adds `test/`. Without the second pass, tests keep running
-against stale types.
+against stale types — vitest strips types with esbuild and never checks them.
 
 ## Pull requests
 
@@ -60,10 +60,31 @@ Pages (<https://egelev.github.io/claude-modules/>) via
 
 ## Releasing (maintainers)
 
-Releases are separate from merges — nothing ships automatically. Bump `version` in `package.json`
-in a PR and merge it, then run the **Release** workflow by hand (**Actions → Release → Run
-workflow**, from `main`); it tags `main`, publishes to npm, and turns the draft GitHub Release
-live as its last step. Publishing a GitHub Release does *not* trigger anything. Full steps, plus
-the one-time repository setup (the `release` environment, branch protection, Trusted Publishing,
-Dependabot, Private Vulnerability Reporting), are in the
-[**Releasing**](README.md#releasing) section of the README.
+Publishing to npm is deliberate and separate from merging — merging to `main` never publishes
+anything on its own, and publishing a GitHub Release does *not* trigger anything either.
+`.github/workflows/release.yml` is manually triggered (`workflow_dispatch`) and does everything in
+one run: tags `main`, builds and tests it, packs and smoke-tests the tarball, opens the GitHub
+Release as a **draft**, attaches the tarball, publishes to npm, and only as its last step publishes
+the Release itself.
+
+GitHub's [immutable releases](https://github.blog/changelog/2025-10-28-immutable-releases-are-now-generally-available/)
+lock a release's assets the instant it's published, so the tarball has to be attached _before_
+publish — hence the draft step, done and undone inside the same run.
+
+### Cutting a release
+
+1. **Bump the version in a PR.** Edit `version` in `package.json` following
+   [semver](https://semver.org/) — `npm version --no-git-tag-version <patch|minor|major>` does it —
+   and merge once CI is green. Nothing publishes yet.
+2. **Run the "Release" workflow.** **Actions → Release → Run workflow**, with **Use workflow from:
+   main** (or `gh workflow run release.yml --ref main`).
+3. **Let it run.** It refuses to run from anything but `main`, fails fast unless the computed tag
+   already has no Release, re-runs the full test suite, packs and smoke-tests the tarball, tags and
+   pushes `main`, opens the Release as a draft, attaches the `.tgz`, publishes to npm via OIDC, and
+   only then publishes the Release itself (making it live and immutable). A normal version goes to
+   the `latest` dist-tag; a prerelease version (`X.Y.Z-rc.1`, etc.) is auto-detected from the `-`
+   and goes to `next`, so `npm install -g claude-modules` never picks it up.
+4. **Approve and verify.** If the `release` environment requires a reviewer, approve the run in the
+   **Actions** tab before it starts. Then confirm the new version and its provenance badge on
+   [npmjs.com](https://www.npmjs.com/package/claude-modules) (`npm audit signatures` after
+   installing also verifies it).
