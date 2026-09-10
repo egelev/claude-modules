@@ -61,7 +61,9 @@ Pages (<https://egelev.github.io/claude-modules/>) via
 ## Releasing (maintainers)
 
 Releases are separate from merges — nothing ships automatically. Bump `version` in `package.json`
-in a PR, merge it, then draft and publish a GitHub Release with tag `vX.Y.Z` on `main`; the
-`Release` workflow does the npm publish. Full steps, plus the one-time repository setup (the
-`release` environment, branch protection, Trusted Publishing, Dependabot, Private Vulnerability
-Reporting), are in the [**Releasing**](README.md#releasing) section of the README.
+in a PR and merge it, then run the **Release** workflow by hand (**Actions → Release → Run
+workflow**, from `main`); it tags `main`, publishes to npm, and turns the draft GitHub Release
+live as its last step. Publishing a GitHub Release does *not* trigger anything. Full steps, plus
+the one-time repository setup (the `release` environment, branch protection, Trusted Publishing,
+Dependabot, Private Vulnerability Reporting), are in the
+[**Releasing**](README.md#releasing) section of the README.

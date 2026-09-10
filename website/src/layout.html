@@ -10,16 +10,18 @@
   <meta name="description" content="{{description}}" />
   <link rel="canonical" href="{{canonical}}" />
 
-  <!-- Open Graph / Twitter. TODO: add og:image + twitter:image:src once a
-       ~1200x630 preview PNG exists, and switch twitter:card to summary_large_image. -->
+  <!-- Open Graph / Twitter. og-cover.png (1200x630) is generated from
+       assets/og-cover.svg — see website/README.md. -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="claude-modules" />
   <meta property="og:title" content="{{title}}" />
   <meta property="og:description" content="{{description}}" />
   <meta property="og:url" content="{{canonical}}" />
-  <meta name="twitter:card" content="summary" />
+  <meta property="og:image" content="{{og_image}}" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="{{title}}" />
   <meta name="twitter:description" content="{{description}}" />
+  <meta name="twitter:image" content="{{og_image}}" />
 
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -29,6 +31,18 @@
     rel="stylesheet"
   />
   <link rel="stylesheet" href="assets/style.css" />
+
+  <!-- Without JS the mobile nav toggle is inert, so the collapsed drawer would
+       be unreachable. Fall back to a static stacked nav. Must come after the
+       stylesheet so it wins on source order over the @media rule it overrides. -->
+  <noscript><style>
+    @media (max-width: 50rem) {
+      .site-header { position: static; height: auto; }
+      .site-header .container { flex-wrap: wrap; }
+      .nav-links { visibility: visible; position: static; transform: none; width: 100%; order: 3; }
+      .nav-toggle { display: none; }
+    }
+  </style></noscript>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to main content</a>

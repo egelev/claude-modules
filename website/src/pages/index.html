@@ -22,9 +22,9 @@
             <a class="btn" href="docs.html">Read the docs</a>
           </div>
           <div class="badge-row">
-            <img src="https://img.shields.io/npm/v/claude-modules" alt="npm version" />
-            <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license: MIT" />
-            <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="node >= 20" />
+            <img src="https://img.shields.io/npm/v/claude-modules" alt="npm version" width="80" height="20" />
+            <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license: MIT" width="90" height="20" />
+            <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="node >= 20" width="100" height="20" />
           </div>
         </div>
         <div>
@@ -35,11 +35,11 @@
             </div>
             <pre><code><span class="tok-comment"># A base layer every stack builds on</span>
 claude-modules create base-dev
-claude-modules plugin install base-dev context7@claude-plugins-official
+claude-modules plugin install base-dev context7@claude-plugins
 
 <span class="tok-comment"># A frontend-specific module</span>
 claude-modules create fe
-claude-modules plugin install fe playwright@claude-plugins-official
+claude-modules plugin install fe playwright@claude-plugins
 
 <span class="tok-comment"># Compose them into one role, declared once</span>
 claude-modules create full-dev --compose base-dev --compose fe
@@ -172,7 +172,7 @@ claude-modules enable full-dev --scope project --save</code></pre>
           <pre><code>npm install -g claude-modules      <span class="tok-comment"># global CLI</span></code></pre>
         </div>
         <p>Or run it without installing: <code>npx claude-modules --help</code></p>
-        <p>See <a href="docs.html#installation">Installation</a> in the docs for building from source and configuring <code>CLAUDE_MODULES_HOME</code>.</p>
+        <p>See <a href="docs.html#installation">Installation</a> in the docs for building from source, and <a href="docs.html#configuration">Configuration</a> for <code>CLAUDE_MODULES_HOME</code>.</p>
       </div>
     </section>
 
@@ -195,20 +195,20 @@ claude-modules enable full-dev --scope project --save</code></pre>
           <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
           <pre><code><span class="tok-comment"># A base layer every stack builds on</span>
 claude-modules create base-dev
-claude-modules plugin install base-dev context7@claude-plugins-official
-claude-modules plugin install base-dev code-simplifier@claude-plugins-official
+claude-modules plugin install base-dev context7@claude-plugins
+claude-modules plugin install base-dev code-simplifier@claude-plugins
 
 <span class="tok-comment"># A Quarkus-specific module</span>
 claude-modules create quarkus
-claude-modules plugin install quarkus jdtls-lsp@claude-plugins-official
-claude-modules plugin install quarkus quarkus-agent@claude-plugins-official
+claude-modules plugin install quarkus jdtls-lsp@claude-plugins
+claude-modules plugin install quarkus quarkus-agent@claude-plugins
 
 <span class="tok-comment"># A frontend-specific module</span>
 claude-modules create fe
-claude-modules plugin install fe modern-web-guidance@claude-plugins-official
-claude-modules plugin install fe playwright@claude-plugins-official
-claude-modules plugin install fe typescript-lsp@claude-plugins-official
-claude-modules plugin install fe frontend-design@claude-plugins-official
+claude-modules plugin install fe modern-web-guidance@claude-plugins
+claude-modules plugin install fe playwright@claude-plugins
+claude-modules plugin install fe typescript-lsp@claude-plugins
+claude-modules plugin install fe frontend-design@claude-plugins
 
 <span class="tok-comment"># Compose them into one role, declared once</span>
 claude-modules create full-dev --compose base-dev --compose quarkus --compose fe
@@ -260,11 +260,11 @@ claude-modules enable base-dev --scope user --only          <span class="tok-com
               <div class="code-block">
                 <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
                 <pre><code>cd ~/projects/api-service
-claude-modules create backend --from-scope local</code></pre>
+claude-modules create api-svc --from-scope local</code></pre>
               </div>
               <div class="code-block">
                 <div class="code-block-head"><span>output</span><button class="copy-btn" type="button">Copy</button></div>
-                <pre><code><span class="tok-out">Created module 'backend' from local scope (/repo/.claude/settings.local.json) with 3 plugin(s), 1 marketplace(s), and 0 composed module(s).</span></code></pre>
+                <pre><code><span class="tok-out">Created module 'api-svc' from local scope (/repo/.claude/settings.local.json) with 3 plugin(s), 1 marketplace(s), and 0 composed module(s).</span></code></pre>
               </div>
             </div>
           </div>
@@ -276,11 +276,11 @@ claude-modules create backend --from-scope local</code></pre>
               <div class="code-block">
                 <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
                 <pre><code>claude-modules list
-claude-modules info backend</code></pre>
+claude-modules info api-svc</code></pre>
               </div>
               <div class="code-block">
                 <div class="code-block-head"><span>output</span><button class="copy-btn" type="button">Copy</button></div>
-                <pre><code><span class="tok-out">backend (v1.0.0): 3 plugin(s):
+                <pre><code><span class="tok-out">api-svc (v1.0.0): 3 plugin(s):
   typescript-lsp@claude-plugins (enabled)
   postgres-mcp@claude-plugins (enabled)
   code-review@claude-plugins (enabled)</span></code></pre>
@@ -298,7 +298,7 @@ claude-modules info backend</code></pre>
               </p>
               <div class="code-block">
                 <div class="code-block-head"><span>terminal</span><button class="copy-btn" type="button">Copy</button></div>
-                <pre><code>claude-modules enable backend --scope project --save</code></pre>
+                <pre><code>claude-modules enable api-svc --scope project --save</code></pre>
               </div>
               <div class="callout callout-warn">
                 <p>
@@ -330,7 +330,7 @@ claude-modules info backend</code></pre>
       <div class="container">
         <div class="section-head">
           <span class="eyebrow">Every command</span>
-          <h2>Fifteen commands cover building, applying, auditing, and moving modules.</h2>
+          <h2>Twenty commands cover building, applying, auditing, and moving modules.</h2>
           <p>Full option tables and every caveat live in the docs — this is the map.</p>
         </div>
         <div class="table-wrap compact">

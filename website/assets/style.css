@@ -30,9 +30,9 @@
   --color-zinc-200: #e4e4e7;
   --color-zinc-100: #f4f4f5;
   --color-stone-50: #fafaf9;
+  --color-orange-700: #c2410c; /* accent as body-text: 5.18:1 on white, WCAG-AA */
   --color-orange-600: #ea580c;
   --color-orange-500: #f97316;
-  --color-orange-300: #fdba74;
   --color-orange-200: #ffedd5;
   --color-orange-100: #fff7ed;
   --color-orange-tint: #ffe8d1; /* compare-table striped emphasis cell */
@@ -46,7 +46,6 @@
 
   --ink: var(--color-zinc-900);
   --ink-soft: var(--color-zinc-600);
-  --ink-faint: var(--color-zinc-400);
   --ink-on-accent: var(--color-espresso);
   --on-dark: var(--color-white);
 
@@ -57,6 +56,10 @@
   --accent-dark: var(--color-orange-600);
   --accent-light: var(--color-orange-200);
   --accent-lighter: var(--color-orange-100);
+  /* Accent used AS TEXT — links, the eyebrow label, active nav. Meets WCAG-AA
+     (4.5:1) on white and on the orange-tinted section grounds; --accent /
+     --accent-dark stay for fills, borders and focus rings (3:1 UI threshold). */
+  --accent-text: var(--color-orange-700);
 
   --header-bg: rgba(255, 255, 255, 0.85);
   --footer-bg: var(--color-zinc-900);
@@ -71,7 +74,6 @@
   /* -- Code / syntax --------------------------------------------------- */
   --code-bg: var(--color-zinc-900);
   --code-ink: var(--color-zinc-100);
-  --code-accent: var(--color-orange-300);
   --code-border: var(--color-zinc-700);
   --code-label: var(--color-zinc-400);
   --code-out: var(--color-zinc-300);
@@ -92,7 +94,6 @@
   --text-md: 1.05rem;
   --text-lead: 1.1rem;
   --text-lg: 1.2rem;
-  --text-xl: 1.3rem;
 
   --font-size-h1: clamp(2.25rem, 5vw, 3.5rem);
   --font-size-h1-docs: clamp(2rem, 4vw, 2.75rem);
@@ -252,13 +253,15 @@ svg {
    ---------------------------------------------------------------------------- */
 
 a {
-  color: var(--accent-dark);
+  color: var(--accent-text);
   text-decoration-thickness: var(--border-width);
   text-underline-offset: 3px;
 }
 
+/* Resting colour (--accent-text, orange-700) clears WCAG-AA 4.5:1; the hover
+   lightens toward the old accent, same direction as before. */
 a:hover {
-  color: var(--accent);
+  color: var(--accent-dark);
 }
 
 h1,
@@ -311,7 +314,7 @@ code {
   border-radius: var(--radius-2xs);
   padding: 0.15em 0.4em;
   font-size: 0.88em;
-  color: var(--accent-dark);
+  color: var(--accent-text);
 }
 
 table {
@@ -430,7 +433,11 @@ section {
   height: 2.1rem;
   border-radius: var(--radius-sm);
   border: var(--border-width) solid var(--border);
-  background: var(--accent);
+  /* 2x2 grid — the favicon.svg motif, so tab icon and on-page mark match */
+  background:
+    var(--accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='7' y='7' width='8' height='8' rx='1.6' fill='%2318181b'/%3E%3Crect x='17' y='7' width='8' height='8' rx='1.6' fill='%23fff'/%3E%3Crect x='7' y='17' width='8' height='8' rx='1.6' fill='%23fff'/%3E%3Crect x='17' y='17' width='8' height='8' rx='1.6' fill='%2318181b'/%3E%3C/svg%3E")
+    center / 70% no-repeat;
   box-shadow: var(--shadow-sm);
   flex-shrink: 0;
 }
@@ -449,11 +456,11 @@ section {
 }
 
 .nav-links a:hover {
-  color: var(--accent-dark);
+  color: var(--accent-text);
 }
 
 .nav-links a.is-active {
-  color: var(--accent-dark);
+  color: var(--accent-text);
 }
 
 .nav-cta {
@@ -566,15 +573,16 @@ section {
   max-width: 100%;
 }
 
-.docs-toc h4 {
+.docs-toc-group {
   font-size: 0.75rem;
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-wider);
   color: var(--text-subtle-on-light);
   margin: var(--space-6) 0 var(--space-2);
 }
 
-.docs-toc h4:first-child {
+.docs-toc-group:first-of-type {
   margin-top: 0;
 }
 
@@ -593,12 +601,12 @@ section {
 }
 
 .docs-toc a:hover {
-  color: var(--accent-dark);
+  color: var(--accent-text);
   border-left-color: var(--accent);
 }
 
 .docs-toc a.is-active {
-  color: var(--accent-dark);
+  color: var(--accent-text);
   border-left-color: var(--accent);
   font-weight: var(--weight-semibold);
 }
@@ -643,7 +651,7 @@ section {
   font-weight: var(--weight-semibold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-widest);
-  color: var(--accent-dark);
+  color: var(--accent-text);
   background: var(--accent-light);
   border: var(--border-width) solid var(--border);
   border-radius: var(--radius-pill);
@@ -819,10 +827,6 @@ section {
   color: var(--code-label);
 }
 
-.tok-str {
-  color: var(--code-accent);
-}
-
 .tok-out {
   color: var(--code-out);
 }
@@ -934,23 +938,6 @@ section {
   margin: var(--space-3) 0 var(--space-5);
 }
 
-.doc-tag {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-bold);
-  background: var(--ink);
-  color: var(--on-dark);
-  border-radius: var(--radius-2xs);
-  padding: 0.15em 0.5em;
-  margin-left: 0.5em;
-  vertical-align: middle;
-}
-
-.doc-tag.warn {
-  background: var(--accent-dark);
-}
-
 /* -- Back to top -- */
 
 .back-to-top {
@@ -992,6 +979,19 @@ section {
 
 .card-grid--single {
   grid-template-columns: 1fr;
+}
+
+/* Present to assistive tech, removed from the visual layout. */
+.u-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ----------------------------------------------------------------------------
