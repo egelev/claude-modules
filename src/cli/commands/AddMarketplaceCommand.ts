@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
@@ -34,7 +35,7 @@ export class AddMarketplaceCommand implements Command {
         throw new InvalidJsonError("--source", err);
       }
       if (this.dryRun) {
-        this.logger.info(`${pc.dim("[dry-run]")} Would register marketplace '${pc.bold(name)}' with an explicit --source in ${target}.`);
+        this.logger.info(`${dryRunTag()} Would register marketplace '${pc.bold(name)}' with an explicit --source in ${target}.`);
       } else {
         await this.register(name, source);
         this.logger.info(`Registered marketplace '${pc.bold(name)}' with an explicit --source in ${target}.`);
@@ -56,7 +57,7 @@ export class AddMarketplaceCommand implements Command {
     }
 
     if (this.dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would register marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}' in ${target}.`);
+      this.logger.info(`${dryRunTag()} Would register marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}' in ${target}.`);
     } else {
       await this.register(name, source);
       this.logger.info(`Registered marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}' in ${target}.`);

@@ -2,6 +2,7 @@ import pc from "picocolors";
 import { Command } from "./Command.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
+import { commandHint } from "../../util/outputStyle.js";
 import { Logger } from "../../util/Logger.js";
 
 export class ListMarketplacesCommand implements Command {
@@ -29,7 +30,9 @@ export class ListMarketplacesCommand implements Command {
     const marketplaces = await this.marketplaceRegistry.list();
     const entries = Object.entries(marketplaces);
     if (entries.length === 0) {
-      this.logger.info("No marketplaces registered. Register one with 'claude-modules marketplace add <spec>'.");
+      this.logger.info(
+        `No marketplaces registered. Register one with ${commandHint("'claude-modules marketplace add <spec>'")}.`
+      );
       return;
     }
     for (const [name, source] of entries) {

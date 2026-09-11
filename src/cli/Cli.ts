@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import pc from "picocolors";
+import { dryRunTag } from "../util/outputStyle.js";
 import { Command } from "./commands/Command.js";
 import { HelpCommand } from "./commands/HelpCommand.js";
 import { VersionCommand } from "./commands/VersionCommand.js";
@@ -243,7 +243,7 @@ export class Cli {
     const logger = new Logger(verbose ? LogLevel.DEBUG : LogLevel.INFO);
 
     if (dryRun && MUTATING_COMMANDS.has(resolveDispatchKey(argv))) {
-      logger.info(`${pc.dim("[dry-run]")} Preview mode: no files will be written, no external commands will run.`);
+      logger.info(`${dryRunTag()} Preview mode: no files will be written, no external commands will run.`);
     }
 
     try {

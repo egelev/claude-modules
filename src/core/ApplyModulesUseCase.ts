@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { commandHint, dryRunTag } from "../util/outputStyle.js";
 import { ResolvedScope, ScopeResolver } from "./ScopeResolver.js";
 import { ModuleResolver } from "./ModuleResolver.js";
 import { SettingsRepository } from "./SettingsRepository.js";
@@ -169,8 +170,8 @@ export class ApplyModulesUseCase {
     this.logger.section();
     if (lessSpecificScopes(scope).length === 0) {
       this.logger.info(
-        "--only: 'user' scope has no broader scope to override (it's the least specific) — this scope's own " +
-          "plugins were still set to exactly the given module(s)."
+        "--only: 'user' scope has no broader scope to override — its own plugins are still set to exactly the " +
+          "given module(s)."
       );
     } else if (overriddenByScope.length === 0) {
       this.logger.info(`--only: no plugins from broader scopes needed overriding in ${resolvedScope.scope} scope.`);
@@ -214,13 +215,13 @@ export class ApplyModulesUseCase {
         const spec = marketplaceSpecFromSource(union.extraKnownMarketplaces[name]!);
         if (spec !== undefined) convertibleMissingMarketplaceNames.push(name);
         return spec !== undefined
-          ? `  claude plugin marketplace add ${spec} --scope user`
+          ? `  ${commandHint(`claude plugin marketplace add ${spec} --scope user`)}`
           : `  # '${name}': source isn't a shape this tool can convert to a CLI spec — add it manually`;
       });
       const hint = !install
         ? "Run with --install to attempt these automatically, or add manually with the command(s) above."
         : dryRun
-          ? `${pc.dim("[dry-run]")} An add attempt would run now for the marketplace(s) above; nothing was actually run.`
+          ? `${dryRunTag()} An add attempt would run now for the marketplace(s) above; nothing was actually run.`
           : "Automatic add did not register the marketplace(s) above — see the warnings above for why, or add manually with the command(s) shown.";
       this.logger.info(`Marketplace(s) not known to Claude Code:\n${lines.join("\n")}\n\n${hint}`);
     }
@@ -234,11 +235,13 @@ export class ApplyModulesUseCase {
   private reportUncachedPlugins(report: EnabledPluginsReport, install: boolean, dryRun: boolean): void {
     if (report.uncachedPluginKeys.length > 0) {
       this.logger.section();
-      const commands = report.uncachedPluginKeys.map((key) => `  claude plugin install ${key} --scope user -y`).join("\n");
+      const commands = report.uncachedPluginKeys
+        .map((key) => `  ${commandHint(`claude plugin install ${key} --scope user -y`)}`)
+        .join("\n");
       const hint = !install
         ? "Run with --install to attempt these automatically, or install manually with the command(s) above."
         : dryRun
-          ? `${pc.dim("[dry-run]")} An install attempt would run now for the plugin(s) above; nothing was actually run.`
+          ? `${dryRunTag()} An install attempt would run now for the plugin(s) above; nothing was actually run.`
           : "Automatic install did not cache the plugin(s) above — see the warnings above for why, or install manually with the command(s) shown.";
       this.logger.info(`Plugin(s) not cached by Claude Code:\n${commands}\n\n${hint}`);
     }

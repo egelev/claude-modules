@@ -29,10 +29,9 @@ claude-modules status --json
 
 ### Check 1 — Claude Code's plugin cache
 
-Prints the same consolidated enabled-plugins report [`enable`](applying.md#enable) does — one list
-covering every scope in effect here, with `(<scope> — overridden by <scope>)` annotations — and
-additionally cross-checks every *effectively* enabled plugin (one not overridden by a more-specific
-scope) against Claude Code's cache, annotating it when missing.
+Prints the same report [`enable`](applying.md#the-report) does, additionally cross-checking every
+*effectively* enabled plugin (one not overridden by a more-specific scope) against Claude Code's
+cache and annotating it when missing.
 
 This is the check `plugin install` / `enable --install` / `reload --install` can't give you after
 the fact: their caching step is best-effort by design, so a caching failure never blocks the
@@ -81,7 +80,7 @@ Enabled plugin(s):
 Module list /repo/.claude-modules (modules: backend) vs project scope (/repo/.claude/settings.json):
   In sync — every enabled plugin matches the listed module(s).
 
-Error: 1 enabled plugin(s) are not cached by Claude Code and would fail a new session with 'not cached': postgres-mcp@claude-plugins. Run 'claude-modules enable --install'/'reload' to re-cache them, or install each manually with 'claude plugin install <plugin>@<marketplace> --scope user'.
+Error: 1 plugin(s) not cached by Claude Code: postgres-mcp@claude-plugins. Run 'claude-modules enable --install' or 'reload' to re-cache them, or install manually with 'claude plugin install <plugin>@<marketplace> --scope user'.
 ```
 
 With no module list for the scope, check 2 reports that and skips instead:

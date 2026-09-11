@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../util/outputStyle.js";
 import { ClaudeRunner, defaultClaudeRunner } from "./ClaudeRunner.js";
 import { ResolvedModules } from "./moduleUnion.js";
 import { Scope } from "./types.js";
@@ -36,7 +37,7 @@ export class ModuleUpdater {
     for (const name of marketplaceNames) {
       if (dryRun) {
         this.logger.info(
-          `${pc.dim("[dry-run]")} Would run 'claude plugin marketplace update ${name}'.`
+          `${dryRunTag()} Would run 'claude plugin marketplace update ${name}'.`
         );
         continue;
       }
@@ -49,7 +50,7 @@ export class ModuleUpdater {
     for (const pluginKey of pluginKeys) {
       if (dryRun) {
         this.logger.info(
-          `${pc.dim("[dry-run]")} Would run 'claude plugin update ${pluginKey} --scope ${scope} -y'.`
+          `${dryRunTag()} Would run 'claude plugin update ${pluginKey} --scope ${scope} -y'.`
         );
         continue;
       }

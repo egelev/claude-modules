@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { CompositionResolver } from "../../core/CompositionResolver.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
@@ -52,7 +53,7 @@ export class CreateModuleCommand implements Command {
 
     if (this.dryRun) {
       this.logger.info(
-        `${pc.dim("[dry-run]")} Would create module '${pc.bold(this.name)}'${origin} with ` +
+        `${dryRunTag()} Would create module '${pc.bold(this.name)}'${origin} with ` +
           `${pluginCount} plugin(s), ${marketplaceCount} marketplace(s), and ${composedCount} composed module(s).`
       );
       return;

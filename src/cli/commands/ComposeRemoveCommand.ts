@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
 import { bumpMinor } from "../../core/semver.js";
@@ -31,7 +32,7 @@ export class ComposeRemoveCommand implements Command {
 
     if (this.dryRun) {
       this.logger.info(
-        `${pc.dim("[dry-run]")} Would remove [${toRemove.map((n) => pc.bold(n)).join(", ")}] from '${pc.bold(this.moduleName)}''s composed modules${skippedNote}.`
+        `${dryRunTag()} Would remove [${toRemove.map((n) => pc.bold(n)).join(", ")}] from '${pc.bold(this.moduleName)}''s composed modules${skippedNote}.`
       );
       return;
     }

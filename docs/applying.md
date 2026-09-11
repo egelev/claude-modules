@@ -65,18 +65,15 @@ Modules active in project scope: [backend].
 
 ### The report
 
-The `Enabled plugin(s):` block covers **every scope in effect here** — `local`, `project`, and
-`user` inside a repository; `local` and `user` outside one — with each plugin tagged inline with its
-scope, colour-coded. Since Claude Code resolves with `local > project > user`, an entry is annotated
-`(<scope> — overridden by <scope>)` when a more-specific scope explicitly disables it.
+The `Enabled plugin(s):` block covers **every scope in effect** — `local`/`project`/`user` inside a
+repository, `local`/`user` outside one — each plugin tagged with its scope, colour-coded, and
+annotated `(<scope> — overridden by <scope>)` when a more-specific scope explicitly disables it. It
+always covers the whole chain **regardless of `--scope`**, since that's what decides which plugins a
+session actually loads — `enable --scope user` inside a repository still shows what `local` there
+contributes on top.
 
-The report always covers the whole chain, **whatever `--scope` you passed**, because that's what
-decides which plugins a session actually loads. So `enable --scope user` run inside a repository
-will also show what that repository's `local` scope contributes on top.
-
-The `Modules active in <scope> scope:` line comes from the scope's saved list — freshly updated
-first, if `--save` was given — or from just this run's module names, noted as not persisted, when no
-list exists.
+The `Modules active in <scope> scope:` line comes from the scope's saved list (updated first, if
+`--save` was given), or this run's own module names — noted as not persisted — when no list exists.
 
 ### Options
 
@@ -254,12 +251,17 @@ installed.
 With no module name given, it updates whatever modules are currently active for `--scope` instead —
 the same saved list [`reload`](#reload) would read back. It errors if that scope has no saved list.
 
-`--scope` defaults to `local`, like every other scope-taking command here, and serves two purposes:
-which scope's saved module list to read (when no name is given), and the `--scope` passed to every
-`claude plugin update` call. Note it means something different for each `claude` subcommand this
-drives: `claude plugin marketplace update` takes no `--scope` at all, and `claude plugin update`
-itself defaults to `user` when run directly — so if your plugins actually live at `user` scope (the
-common case for something installed once and shared across repos), pass `--scope user` explicitly.
+`--scope` (default `local`) serves two purposes: which saved module list to read (when no name is
+given), and the `--scope` passed to `claude plugin update` — but the two `claude` subcommands this
+drives treat it differently:
+
+| `claude` subcommand | `--scope`'s effect |
+|---|---|
+| `claude plugin marketplace update` | not passed — marketplaces aren't scoped |
+| `claude plugin update` | passed through; defaults to `user` when run directly, not `local` |
+
+If your plugins actually live at `user` scope (the common case for something installed once and
+shared across repos), pass `--scope user` explicitly.
 
 Best-effort per item, like [`enable --install`](#--install): one marketplace or plugin failing to
 update (network error, nothing installed at that scope, ...) is logged as a warning and doesn't stop

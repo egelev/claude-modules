@@ -100,11 +100,9 @@ claude-modules enable investing --scope user --only --save   # only investing is
 | Auditing what's on  | read three files and apply precedence in your head | `status` — exit-coded, `--json`            |
 | Sharing with a team | commit `.claude/settings.json` wholesale           | commit `.claude-modules`, then `reload`    |
 
-There's a secondary benefit too: every enabled plugin adds tools Claude has to choose between on
-every turn, and [Claude's own docs](https://code.claude.com/docs/en/agent-sdk/tool-search) note that
-tool-selection accuracy degrades past 30–50 loaded tools. Scoping your tools to the role you're
-currently performing helps — though the picture is more nuanced for MCP-heavy plugins, and
-[the caveat is spelled out in the docs](docs/concepts.md#context-budget) rather than glossed here.
+There's a secondary benefit too: fewer enabled plugins means fewer tools Claude has to choose
+between on every turn — see [Concepts → Context budget](docs/concepts.md#context-budget) for the
+cost this addresses and a caveat on MCP-heavy plugins.
 
 ---
 
@@ -195,19 +193,17 @@ Saved module selection to /repo/.claude-modules.
 Modules active in project scope: [backend].
 ```
 
-Two things worth noticing. The report covers **every scope in effect**, not just the one you wrote —
-these plugins are listed twice because they're still enabled in `local` too, where they started.
-And `postgres-mcp` is flagged as not cached by Claude Code: enabling a plugin isn't enough on its
-own, so `claude-modules` tells you, and `--install` fixes it.
+These plugins are listed twice because the report covers **every scope in effect**, not just the one
+written — they're still enabled in `local` too, where they started. `postgres-mcp` is flagged as not
+cached because enabling a plugin isn't the same as caching it; `--install` fixes that. See
+[Applying modules → The report](docs/applying.md#the-report) for the full format.
 
 From here, `claude-modules status` audits the result at any time, and exits non-zero if something
 has drifted — see [the docs](docs/status.md#status).
 
-> **Changes apply to the _next_ session.** Claude Code reads `enabledPlugins` at session start, so
-> these commands have no effect on a session that's already open — which looks exactly like the
-> command having done nothing. Run `/reload-plugins` in that session (add `--force` if it warns
-> about the prompt cache), or start a new one. Every command that changes what's enabled reminds you
-> of this in its output.
+> **Changes apply to the _next_ session** — an already-open one needs `/reload-plugins` (or a
+> restart) to pick them up. See [Applying modules](docs/applying.md) for why, every command reminds
+> you in its own output.
 
 ---
 

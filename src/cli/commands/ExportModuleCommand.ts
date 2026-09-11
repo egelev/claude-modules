@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleArchiver } from "../../core/ModuleArchiver.js";
 import { Logger } from "../../util/Logger.js";
@@ -34,7 +35,7 @@ export class ExportModuleCommand implements Command {
       const closure = await this.archiver.collectClosure(this.name);
       const composed = closure.filter((n) => n !== this.name);
       this.logger.info(
-        `${pc.dim("[dry-run]")} Would export module '${pc.bold(this.name)}'` +
+        `${dryRunTag()} Would export module '${pc.bold(this.name)}'` +
           (composed.length > 0 ? ` and ${composed.length} composed module(s) (${composed.join(", ")})` : "") +
           ` to '${pc.bold(outputPath)}'.`
       );

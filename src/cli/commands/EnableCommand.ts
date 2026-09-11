@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ApplyModulesUseCase } from "../../core/ApplyModulesUseCase.js";
 import { ModuleListFile } from "../../core/ModuleListFile.js";
@@ -64,7 +65,7 @@ export class EnableCommand implements Command {
 
       if (this.dryRun) {
         this.logger.info(
-          `${pc.dim("[dry-run]")} Would save module selection [${pc.bold(resultingNames.join(", "))}] to ${pc.bold(targetPath)}.`
+          `${dryRunTag()} Would save module selection [${pc.bold(resultingNames.join(", "))}] to ${pc.bold(targetPath)}.`
         );
       } else {
         await this.moduleListFile.write(targetPath, resultingNames);
