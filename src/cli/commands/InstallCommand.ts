@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
@@ -77,7 +78,7 @@ export class InstallCommand implements Command {
 
     this.logger.section();
     if (this.dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would install '${pc.bold(full)}' into module '${pc.bold(this.moduleName)}'.`);
+      this.logger.info(`${dryRunTag()} Would install '${pc.bold(full)}' into module '${pc.bold(this.moduleName)}'.`);
     } else {
       await this.moduleStore.save(this.moduleName, module);
       this.logger.info(`Installed '${pc.bold(full)}' into module '${pc.bold(this.moduleName)}'.`);

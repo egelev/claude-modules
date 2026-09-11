@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../util/outputStyle.js";
 import { KnownMarketplacesCache } from "./KnownMarketplacesCache.js";
 import { InstalledPluginsCache } from "./InstalledPluginsCache.js";
 import { parsePluginKey } from "./pluginKey.js";
@@ -39,7 +40,7 @@ export class PluginCacheInstaller {
       }
       if (dryRun) {
         this.logger.info(
-          `${pc.dim("[dry-run]")} '${pc.bold(pluginKey)}' is not cached by Claude Code — would run 'claude plugin ` +
+          `${dryRunTag()} '${pc.bold(pluginKey)}' is not cached by Claude Code — would run 'claude plugin ` +
             `install ${pluginKey} --scope ${scope} -y'.`
         );
         continue;

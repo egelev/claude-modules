@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import { Command } from "./Command.js";
 import { ScopeResolver } from "../../core/ScopeResolver.js";
 import { SettingsRepository } from "../../core/SettingsRepository.js";
@@ -99,25 +100,27 @@ export class StatusCommand implements Command {
     const problems: string[] = [];
     if (uncachedPluginKeys.length > 0) {
       problems.push(
-        `${uncachedPluginKeys.length} enabled plugin(s) are not cached by Claude Code and would fail a new ` +
-          `session with 'not cached': ${uncachedPluginKeys.join(", ")}. Run 'claude-modules enable --install'/'reload' to ` +
-          `re-cache them, or install each manually with 'claude plugin install <plugin>@<marketplace> --scope user'.`
+        `${uncachedPluginKeys.length} plugin(s) not cached by Claude Code: ` +
+          `${uncachedPluginKeys.map((key) => pc.bold(key)).join(", ")}. Run 'claude-modules enable --install' or ` +
+          `'reload' to re-cache them, or install manually with 'claude plugin install <plugin>@<marketplace> ` +
+          `--scope user'.`
       );
     }
     if (moduleDrift.resolutionFailed) {
-      problems.push("Could not resolve the listed module(s) against this scope — see the warning above.");
+      problems.push("Could not resolve the listed module(s) — see the warning above.");
     }
     if (moduleDrift.missingPluginKeys.length > 0) {
       problems.push(
-        `${moduleDrift.missingPluginKeys.length} plugin(s) expected by the listed module(s) aren't enabled in ` +
-          `${this.scope} scope: ${moduleDrift.missingPluginKeys.join(", ")}. Run 'claude-modules reload' to apply them.`
+        `${moduleDrift.missingPluginKeys.length} plugin(s) wanted by the listed module(s) aren't enabled in ` +
+          `${this.scope} scope: ${moduleDrift.missingPluginKeys.map((key) => pc.bold(key)).join(", ")}. Run ` +
+          `'claude-modules reload' to apply them.`
       );
     }
     if (moduleDrift.stalePluginKeys.length > 0) {
       problems.push(
         `${moduleDrift.stalePluginKeys.length} plugin(s) enabled in ${this.scope} scope aren't declared by any ` +
-          `listed module: ${moduleDrift.stalePluginKeys.join(", ")}. Run 'claude-modules reload' to prune them, ` +
-          `or update the module(s)/.claude-modules if this is intentional.`
+          `listed module: ${moduleDrift.stalePluginKeys.map((key) => pc.bold(key)).join(", ")}. Run ` +
+          `'claude-modules reload' to prune them, or edit .claude-modules if this is intentional.`
       );
     }
     if (verification !== undefined && !verification.unavailable) {
@@ -126,15 +129,16 @@ export class StatusCommand implements Command {
       if (verification.unexpectedlyDisabled.length > 0) {
         problems.push(
           `${verification.unexpectedlyDisabled.length} plugin(s) this tool considers enabled are reported disabled ` +
-            `by Claude Code: ${verification.unexpectedlyDisabled.join(", ")}. A managed-settings policy is the ` +
-            `usual cause — these will not load in a session regardless of what settings.json says.`
+            `by Claude Code: ${verification.unexpectedlyDisabled.map((key) => pc.bold(key)).join(", ")}. Likely a ` +
+            `managed-settings policy — these won't load in a session regardless of settings.json.`
         );
       }
       if (verification.unexpectedlyEnabled.length > 0) {
         problems.push(
-          `${verification.unexpectedlyEnabled.length} plugin(s) are reported enabled by Claude Code but aren't ` +
-            `accounted for by this tool's scope resolution: ${verification.unexpectedlyEnabled.join(", ")}. These ` +
-            `load in a session without any module asking for them.`
+          `${verification.unexpectedlyEnabled.length} plugin(s) reported enabled by Claude Code aren't accounted ` +
+            `for by this tool's scope resolution: ` +
+            `${verification.unexpectedlyEnabled.map((key) => pc.bold(key)).join(", ")}. These load without any ` +
+            `module asking for them.`
         );
       }
     }

@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { DisableModulesUseCase } from "../../core/DisableModulesUseCase.js";
 import { ModuleListFile } from "../../core/ModuleListFile.js";
@@ -37,7 +38,7 @@ export class DisableCommand implements Command {
         );
       } else if (this.dryRun) {
         this.logger.info(
-          `${pc.dim("[dry-run]")} Would update ${pc.bold(existingListPath)} to [${pc.bold(resultingNames.join(", "))}]${skippedNote}.`
+          `${dryRunTag()} Would update ${pc.bold(existingListPath)} to [${pc.bold(resultingNames.join(", "))}]${skippedNote}.`
         );
       } else {
         await this.moduleListFile.write(existingListPath, resultingNames);

@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { MarketplaceRegistry } from "../../core/MarketplaceRegistry.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
@@ -25,7 +26,7 @@ export class RemoveMarketplaceCommand implements Command {
         return;
       }
       if (this.dryRun) {
-        this.logger.info(`${pc.dim("[dry-run]")} Would remove marketplace '${pc.bold(this.name)}' from ${target}.`);
+        this.logger.info(`${dryRunTag()} Would remove marketplace '${pc.bold(this.name)}' from ${target}.`);
         return;
       }
       await this.marketplaceRegistry.remove(this.name);
@@ -40,7 +41,7 @@ export class RemoveMarketplaceCommand implements Command {
     }
 
     if (this.dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would remove marketplace '${pc.bold(this.name)}' from ${target}.`);
+      this.logger.info(`${dryRunTag()} Would remove marketplace '${pc.bold(this.name)}' from ${target}.`);
       return;
     }
 

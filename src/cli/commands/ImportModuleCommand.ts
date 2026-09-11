@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleArchiver } from "../../core/ModuleArchiver.js";
 import { Logger } from "../../util/Logger.js";
@@ -35,7 +36,7 @@ export class ImportModuleCommand implements Command {
         : "");
 
     if (this.dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would import ${summary} from '${pc.bold(this.archivePath)}'.`);
+      this.logger.info(`${dryRunTag()} Would import ${summary} from '${pc.bold(this.archivePath)}'.`);
       return;
     }
 

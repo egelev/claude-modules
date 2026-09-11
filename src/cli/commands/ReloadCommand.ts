@@ -7,6 +7,7 @@ import { Scope } from "../../core/types.js";
 import { CliError, ModuleNotFoundError } from "../../util/errors.js";
 import { Logger } from "../../util/Logger.js";
 import { isFile } from "../../util/fsProbe.js";
+import { commandHint } from "../../util/outputStyle.js";
 
 export class ReloadCommand implements Command {
   constructor(
@@ -64,8 +65,8 @@ export class ReloadCommand implements Command {
         `No module list found for ${this.scope} scope (looked for ${await this.moduleListFile.searchDescription(
           this.scope,
           this.cwd
-        )}). Run 'claude-modules enable <module...> --scope ${this.scope} --save' to create one, or pass ` +
-          `--file <path> to read one from elsewhere.`
+        )}). Run ${commandHint(`'claude-modules enable <module...> --scope ${this.scope} --save'`)} to create one, ` +
+          `or pass --file <path> to read one from elsewhere.`
       );
     }
     return found;

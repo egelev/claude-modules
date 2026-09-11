@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleListFile } from "../../core/ModuleListFile.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
@@ -32,7 +33,7 @@ export class RemoveModuleCommand implements Command {
     }
 
     if (this.dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would remove module '${pc.bold(this.name)}'.`);
+      this.logger.info(`${dryRunTag()} Would remove module '${pc.bold(this.name)}'.`);
       return;
     }
 

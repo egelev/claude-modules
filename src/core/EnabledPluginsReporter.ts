@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { commandHint, dryRunTag } from "../util/outputStyle.js";
 import { ScopeResolver } from "./ScopeResolver.js";
 import { SettingsRepository } from "./SettingsRepository.js";
 import { InstalledPluginsCache } from "./InstalledPluginsCache.js";
@@ -124,7 +125,7 @@ export class EnabledPluginsReporter {
 
     // Only the audited scope's entries reflect this run's computed result, so only they get marked
     // hypothetical under --dry-run; the rest are on-disk state either way.
-    const dryRunMarker = isAudited && dryRun ? ` ${pc.dim("[dry-run]")}` : "";
+    const dryRunMarker = isAudited && dryRun ? ` ${dryRunTag()}` : "";
 
     return names.map((name) => {
       const overriddenBy = moreSpecificScopes.find((s) => s.settings.enabledPlugins?.[name] === false);
@@ -137,7 +138,7 @@ export class EnabledPluginsReporter {
       const scopeTag = colorScope(snapshot.scope);
       if (!cached.has(name)) {
         uncachedPluginKeys.add(name);
-        return `  - ${pc.bold(name)} (${scopeTag} — not cached by Claude Code — run 'claude plugin install ${name} --scope user -y')${dryRunMarker}`;
+        return `  - ${pc.bold(name)} (${scopeTag} — not cached by Claude Code — run ${commandHint(`'claude plugin install ${name} --scope user -y'`)})${dryRunMarker}`;
       }
       return `  - ${pc.bold(name)} (${scopeTag})${dryRunMarker}`;
     });

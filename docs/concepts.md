@@ -184,16 +184,10 @@ cycle, or a conflict surfaces only on the *next* command that resolves the modul
 
 ### Known limit: overrides don't propagate past one level
 
-`plugin uninstall --disable` beats a **directly** composed child's `true`. Resolve that module into
-a grandparent's composition and the override evaporates — the grandparent sees no opinion either
-way, not an explicit `false`.
-
-Relatedly, two composed siblings that disagree on a plugin key resolve silently rather than
-erroring the way a marketplace conflict does: the enabling sibling wins, without warning.
-
-Neither case is common enough today to justify reworking composition's internal representation to
-track a real enabled / disabled / unmentioned tri-state. If you build a deep composition tree that
-depends on multi-level exclusion, know that it doesn't propagate past one level.
+`plugin uninstall --disable` only beats a **directly** composed child — resolve it into a
+grandparent's composition and the override evaporates. See
+[Composing modules → The one-level override limit](compose.md#the-one-level-override-limit) for the
+full detail, including the related silent-resolution behavior for disagreeing siblings.
 
 ---
 
@@ -265,10 +259,8 @@ at a scope it wasn't written for, and `enable --scope X --save`, `reload --scope
 
 ## Context budget
 
-A secondary benefit, stated honestly.
-
-Every enabled plugin adds tools Claude has to choose between on every turn, and Claude's own
-documentation is explicit that this has a cost:
+A secondary benefit: every enabled plugin adds tools Claude has to choose between on every turn, and
+Claude's own documentation is explicit that this has a cost:
 
 > "Tool selection accuracy degrades with more than 30-50 tools loaded at once."
 > — [Claude Code docs: *Scale to many tools with tool search*](https://code.claude.com/docs/en/agent-sdk/tool-search)
@@ -289,8 +281,7 @@ which is why this README leads with those instead.
 `claude-modules` reports plugin *counts*, not tokens. Claude Code knows the number —
 `claude plugin details <plugin>` prints a "Projected token cost" — but there's no way to aggregate
 it per module yet: the command has no `--json` output, and it only resolves plugins that are already
-*enabled*, so it can't cost a module you haven't applied. (Its error message suggests `--plugin-dir`
-as a way around that; the flag isn't implemented on `details`.) Revisit when either lands upstream.
+*enabled*, so it can't cost a module you haven't applied.
 
 ---
 

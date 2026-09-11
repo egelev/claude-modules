@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
 import { parsePluginKey } from "../../core/pluginKey.js";
@@ -34,7 +35,7 @@ export class UninstallCommand implements Command {
         return;
       }
       if (this.dryRun) {
-        this.logger.info(`${pc.dim("[dry-run]")} Would disable '${pc.bold(full)}' in module '${pc.bold(this.moduleName)}'.`);
+        this.logger.info(`${dryRunTag()} Would disable '${pc.bold(full)}' in module '${pc.bold(this.moduleName)}'.`);
         return;
       }
       module.enabledPlugins[full] = false;
@@ -49,7 +50,7 @@ export class UninstallCommand implements Command {
     }
 
     if (this.dryRun) {
-      this.logger.info(`${pc.dim("[dry-run]")} Would uninstall '${pc.bold(full)}' from module '${pc.bold(this.moduleName)}'.`);
+      this.logger.info(`${dryRunTag()} Would uninstall '${pc.bold(full)}' from module '${pc.bold(this.moduleName)}'.`);
       return;
     }
 

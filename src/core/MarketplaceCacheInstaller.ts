@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../util/outputStyle.js";
 import { KnownMarketplacesCache } from "./KnownMarketplacesCache.js";
 import { marketplaceSpecFromSource } from "./marketplaceSpec.js";
 import { ClaudeRunner, defaultClaudeRunner } from "./ClaudeRunner.js";
@@ -37,7 +38,7 @@ export class MarketplaceCacheInstaller {
           spec !== undefined
             ? `would run 'claude plugin marketplace add ${spec} --scope ${scope}'`
             : "would need manual addition — its source isn't a shape this tool can convert to a CLI spec";
-        this.logger.info(`${pc.dim("[dry-run]")} Marketplace '${pc.bold(name)}' isn't known to Claude Code — ${action}.`);
+        this.logger.info(`${dryRunTag()} Marketplace '${pc.bold(name)}' isn't known to Claude Code — ${action}.`);
         continue;
       }
       await this.installOne(name, source, scope);

@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../util/outputStyle.js";
 import { SettingsRepository } from "./SettingsRepository.js";
 import { ClaudeSettings } from "./types.js";
 import { Logger } from "../util/Logger.js";
@@ -12,7 +13,7 @@ export async function writeSettingsUnlessDryRun(
   settings: ClaudeSettings
 ): Promise<void> {
   if (dryRun) {
-    logger.info(`${pc.dim("[dry-run]")} Would write ${pc.bold(settingsPath)} — no files modified.`);
+    logger.info(`${dryRunTag()} Would write ${pc.bold(settingsPath)} — no files modified.`);
   } else {
     await settingsRepository.write(settingsPath, settings);
   }

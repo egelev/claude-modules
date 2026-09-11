@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
 import { CompositionResolver } from "../../core/CompositionResolver.js";
@@ -39,7 +40,7 @@ export class ComposeAddCommand implements Command {
 
     if (this.dryRun) {
       this.logger.info(
-        `${pc.dim("[dry-run]")} Would add [${toAdd.map((n) => pc.bold(n)).join(", ")}] to '${pc.bold(this.moduleName)}''s composed modules${skippedNote}.`
+        `${dryRunTag()} Would add [${toAdd.map((n) => pc.bold(n)).join(", ")}] to '${pc.bold(this.moduleName)}''s composed modules${skippedNote}.`
       );
       return;
     }

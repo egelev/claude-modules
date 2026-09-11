@@ -1,4 +1,5 @@
 import pc from "picocolors";
+import { commandHint, dryRunTag } from "../../util/outputStyle.js";
 import { Command } from "./Command.js";
 import { ModuleResolver } from "../../core/ModuleResolver.js";
 import { ModuleListFile } from "../../core/ModuleListFile.js";
@@ -48,7 +49,7 @@ export class UpdateCommand implements Command {
     this.logger.section();
     if (this.dryRun) {
       this.logger.info(
-        `${pc.dim("[dry-run]")} Would attempt to update ${Object.keys(resolved.extraKnownMarketplaces).length} ` +
+        `${dryRunTag()} Would attempt to update ${Object.keys(resolved.extraKnownMarketplaces).length} ` +
           `marketplace(s) and ${resolved.enabledPluginNames.size} plugin(s) for module(s) ` +
           `[${pc.bold(moduleNames.join(", "))}]; nothing was actually run.`
       );
@@ -61,8 +62,8 @@ export class UpdateCommand implements Command {
 
     this.logger.section();
     this.logger.info(
-      "Already running a Claude Code session? Updated plugins take effect on restart, not automatically — " +
-        "'claude plugin update' applies on the next launch of Claude Code."
+      `Already running a Claude Code session? Updated plugins take effect on ${pc.bold("restart")}, not ` +
+        `automatically — ${pc.bold("claude plugin update")} applies on the next launch of Claude Code.`
     );
 
     const failedCount = result.failedMarketplaceNames.length + result.failedPluginKeys.length;
@@ -88,8 +89,8 @@ export class UpdateCommand implements Command {
         `No module list found for ${this.scope} scope (looked for ${await this.moduleListFile.searchDescription(
           this.scope,
           this.cwd
-        )}). Run 'claude-modules enable <module...> --scope ${this.scope} --save' to create one, or pass ` +
-          "module name(s) directly: 'claude-modules update <module...>'."
+        )}). Run ${commandHint(`'claude-modules enable <module...> --scope ${this.scope} --save'`)} to create one, ` +
+          `or pass module name(s) directly: ${commandHint("'claude-modules update <module...>'")}.`
       );
     }
     const moduleNames = await this.moduleListFile.read(found);
