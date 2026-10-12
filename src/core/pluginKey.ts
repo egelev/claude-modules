@@ -14,3 +14,13 @@ export function parsePluginKey(key: string): PluginKey {
   }
   return { full: key, plugin: key.slice(0, atIndex), marketplace: key.slice(atIndex + 1) };
 }
+
+/** The marketplace part of a plugin key, or undefined for a malformed one — for code reading keys out
+ * of hand-editable settings files, where a stray bad key mustn't throw mid-report. */
+export function marketplaceOfPluginKey(key: string): string | undefined {
+  try {
+    return parsePluginKey(key).marketplace;
+  } catch {
+    return undefined;
+  }
+}

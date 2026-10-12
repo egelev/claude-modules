@@ -1,5 +1,6 @@
 import pc from "picocolors";
 import { EnabledPluginsReport } from "./EnabledPluginsReporter.js";
+import { marketplaceOfPluginKey } from "./pluginKey.js";
 import { CliError } from "../util/errors.js";
 import { commandHint } from "../util/outputStyle.js";
 
@@ -8,6 +9,9 @@ export interface InstallCheckInput {
   enabledPluginNames: ReadonlySet<string>;
   marketplaceNames: ReadonlySet<string>;
   uncachedMarketplaceNames: readonly string[];
+  /** Marketplaces Claude Code registers from settings.json at the next session start — plugins from
+   * them can't be cached before that, so they don't count as a failed --install. */
+  pendingMarketplaceNames: readonly string[];
 }
 
 /**
@@ -16,11 +20,14 @@ export interface InstallCheckInput {
  * `--install`'s whole point is to make the plugin usable, not just to have attempted it.
  */
 export function assertInstallCached(input: InstallCheckInput): void {
-  const { report, enabledPluginNames, marketplaceNames, uncachedMarketplaceNames } = input;
+  const { report, enabledPluginNames, marketplaceNames, uncachedMarketplaceNames, pendingMarketplaceNames } = input;
   const uncachedMarketplaces = new Set(uncachedMarketplaceNames);
   const stillMissingMarketplaces = [...marketplaceNames].filter((name) => uncachedMarketplaces.has(name)).sort();
   const uncachedPlugins = new Set(report.uncachedPluginKeys);
-  const stillMissingPlugins = [...enabledPluginNames].filter((key) => uncachedPlugins.has(key)).sort();
+  const pendingMarketplaces = new Set(pendingMarketplaceNames);
+  const stillMissingPlugins = [...enabledPluginNames]
+    .filter((key) => uncachedPlugins.has(key) && !pendingMarketplaces.has(marketplaceOfPluginKey(key) ?? ""))
+    .sort();
 
   const messages: string[] = [];
   if (stillMissingMarketplaces.length > 0) {

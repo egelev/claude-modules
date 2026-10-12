@@ -2,7 +2,7 @@ import { Paths } from "../util/Paths.js";
 import { atomicWriteFile, toJsonWithTrailingNewline } from "../util/atomicWrite.js";
 import { MarketplaceNotFoundError } from "../util/errors.js";
 import { readOptionalJsonFile } from "../util/jsonFile.js";
-import { MarketplaceRegistryFile, MarketplaceSource } from "./types.js";
+import { MarketplaceRegistryFile, MarketplaceSource, upgradeMarketplaceSources } from "./types.js";
 
 /** The global marketplace registry kept in $CLAUDE_MODULES_HOME/settings.json, populated by `marketplace add`. */
 export class MarketplaceRegistry {
@@ -39,6 +39,7 @@ export class MarketplaceRegistry {
       () => ({}),
       `Marketplace registry (${this.paths.globalSettingsFile})`
     );
-    return { ...parsed, marketplaces: parsed.marketplaces ?? {} };
+    // Upgraded on every read (see upgradeLegacyMarketplaceSource); the next set/remove persists it.
+    return { ...parsed, marketplaces: upgradeMarketplaceSources(parsed.marketplaces ?? {}) };
   }
 }

@@ -1,4 +1,5 @@
 import { InvalidModuleShapeError } from "../util/errors.js";
+import { upgradeLegacyMarketplaceSource } from "./marketplaceSpec.js";
 
 export enum Scope {
   User = "user",
@@ -102,7 +103,18 @@ export function normalizeModule(parsed: Partial<Module>, moduleName?: string): M
   return {
     version: parsed.version ?? "1.0.0",
     enabledPlugins: parsed.enabledPlugins ?? {},
-    extraKnownMarketplaces: parsed.extraKnownMarketplaces ?? {},
+    // Sources stored by older versions of this tool (e.g. `{source:"local"}`) come back in the shape
+    // Claude Code accepts, so everything downstream — enable, export, conflict checks — sees only that.
+    extraKnownMarketplaces: upgradeMarketplaceSources(parsed.extraKnownMarketplaces ?? {}),
     composedModules: parsed.composedModules ?? [],
   };
+}
+
+/** Maps every value of a name → source map through `upgradeLegacyMarketplaceSource`. */
+export function upgradeMarketplaceSources(
+  marketplaces: Readonly<Record<string, MarketplaceSource>>
+): Record<string, MarketplaceSource> {
+  return Object.fromEntries(
+    Object.entries(marketplaces).map(([name, source]) => [name, upgradeLegacyMarketplaceSource(source)])
+  );
 }

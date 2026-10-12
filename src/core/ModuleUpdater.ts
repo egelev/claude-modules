@@ -1,8 +1,11 @@
 import pc from "picocolors";
 import { dryRunTag } from "../util/outputStyle.js";
 import { ClaudeRunner, defaultClaudeRunner } from "./ClaudeRunner.js";
+import { KnownMarketplacesCache } from "./KnownMarketplacesCache.js";
+import { marketplaceAddPlan } from "./marketplaceSpec.js";
 import { ResolvedModules } from "./moduleUnion.js";
-import { Scope } from "./types.js";
+import { marketplaceOfPluginKey } from "./pluginKey.js";
+import { MarketplaceSource, Scope } from "./types.js";
 import { Logger } from "../util/Logger.js";
 
 export interface ModuleUpdateResult {
@@ -19,10 +22,13 @@ export interface ModuleUpdateResult {
  * ApplyModulesUseCase's --install ordering, so a plugin whose marketplace just moved still gets a
  * chance at a fresh update in the same run. Best-effort per item: one failure is a logged warning,
  * never a thrown error, so the rest of the run still gets attempted — the caller decides whether
- * any failure should affect the process exit code.
+ * any failure should affect the process exit code. A marketplace Claude Code hasn't registered yet,
+ * and only can from settings.json (see `marketplaceAddPlan`), is skipped with its plugins rather than
+ * failed: until the next session start registers it, there's nothing to update.
  */
 export class ModuleUpdater {
   constructor(
+    private readonly knownMarketplacesCache: KnownMarketplacesCache,
     private readonly logger: Logger,
     private readonly env: NodeJS.ProcessEnv,
     private readonly runClaude: ClaudeRunner = defaultClaudeRunner
@@ -32,9 +38,18 @@ export class ModuleUpdater {
     const marketplaceNames = Object.keys(resolved.extraKnownMarketplaces).sort();
     const pluginKeys = [...resolved.enabledPluginNames].sort();
 
+    const pending = await this.pendingSettingsMarketplaces(resolved.extraKnownMarketplaces);
+
     const updatedMarketplaceNames: string[] = [];
     const failedMarketplaceNames: string[] = [];
     for (const name of marketplaceNames) {
+      if (pending.has(name)) {
+        this.logger.info(
+          `Skipping marketplace '${pc.bold(name)}' and its plugins: Claude Code registers it from settings.json ` +
+            "at the next session start, so there's nothing to update yet."
+        );
+        continue;
+      }
       if (dryRun) {
         this.logger.info(
           `${dryRunTag()} Would run 'claude plugin marketplace update ${name}'.`
@@ -48,6 +63,10 @@ export class ModuleUpdater {
     const updatedPluginKeys: string[] = [];
     const failedPluginKeys: string[] = [];
     for (const pluginKey of pluginKeys) {
+      if (pending.has(marketplaceOfPluginKey(pluginKey) ?? "")) {
+        this.logger.debug(`Skipping '${pc.bold(pluginKey)}': its marketplace isn't registered with Claude Code yet.`);
+        continue;
+      }
       if (dryRun) {
         this.logger.info(
           `${dryRunTag()} Would run 'claude plugin update ${pluginKey} --scope ${scope} -y'.`
@@ -59,6 +78,18 @@ export class ModuleUpdater {
     }
 
     return { updatedMarketplaceNames, failedMarketplaceNames, updatedPluginKeys, failedPluginKeys };
+  }
+
+  /** Declared marketplaces Claude Code doesn't know yet whose source only settings.json can express. */
+  private async pendingSettingsMarketplaces(
+    marketplaces: Readonly<Record<string, MarketplaceSource>>
+  ): Promise<Set<string>> {
+    const pending = new Set<string>();
+    for (const [name, source] of Object.entries(marketplaces)) {
+      if (marketplaceAddPlan(source).kind !== "from-settings") continue;
+      if ((await this.knownMarketplacesCache.get(name)) === undefined) pending.add(name);
+    }
+    return pending;
   }
 
   private async updateMarketplace(name: string): Promise<boolean> {

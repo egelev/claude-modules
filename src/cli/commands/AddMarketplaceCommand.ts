@@ -7,6 +7,7 @@ import { MarketplaceCacheInstaller } from "../../core/MarketplaceCacheInstaller.
 import { classifyMarketplaceSource, parseMarketplaceSpec } from "../../core/marketplaceSpec.js";
 import { bumpPatch } from "../../core/semver.js";
 import { Logger } from "../../util/Logger.js";
+import { isDirectory, isFile } from "../../util/fsProbe.js";
 import { CliError, describeError, InvalidJsonError } from "../../util/errors.js";
 import { describeMarketplaceTarget } from "./marketplaceTarget.js";
 
@@ -16,6 +17,7 @@ export class AddMarketplaceCommand implements Command {
     private readonly nameOverride: string | undefined,
     private readonly sourceJson: string | undefined,
     private readonly moduleName: string | undefined,
+    private readonly cwd: string,
     private readonly marketplaceRegistry: MarketplaceRegistry,
     private readonly moduleStore: ModuleStore,
     private readonly marketplaceCacheInstaller: MarketplaceCacheInstaller,
@@ -47,7 +49,7 @@ export class AddMarketplaceCommand implements Command {
     let name: string;
     let source: unknown;
     try {
-      const parsed = parseMarketplaceSpec(this.spec);
+      const parsed = parseMarketplaceSpec(this.spec, { cwd: this.cwd });
       name = this.nameOverride ?? parsed.inferredName;
       source = parsed.source;
     } catch (err) {
@@ -55,6 +57,7 @@ export class AddMarketplaceCommand implements Command {
         `Could not infer a marketplace source from '${this.spec}'. Use --source '<json>' to specify it explicitly. (${describeError(err)})`
       );
     }
+    source = await this.checkLocalPath(source);
 
     if (this.dryRun) {
       this.logger.info(`${dryRunTag()} Would register marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}' in ${target}.`);
@@ -63,21 +66,35 @@ export class AddMarketplaceCommand implements Command {
       this.logger.info(`Registered marketplace '${pc.bold(name)}' from '${pc.bold(this.spec)}' in ${target}.`);
     }
     await this.marketplaceCacheInstaller.ensureCached({ [name]: source }, this.dryRun);
-    if (classifyMarketplaceSource(source) !== "github") {
-      this.logger.section();
-      this.logger.warn(
-        "The settings.json shape for non-GitHub marketplace sources is unverified against real Claude Code output.\n  " +
-          "Double-check the registered entry, or re-run with --source '<json>' if it's wrong."
-      );
+  }
+
+  /**
+   * Mirrors the checks Claude Code's own `marketplace add` makes on a path spec. An existing path is
+   * typed by what it is — a directory, or a `.json` file (any other file is refused) — instead of by
+   * its extension alone. A missing path is only a warning: the module write is still worth keeping,
+   * e.g. for a path that's created later.
+   */
+  private async checkLocalPath(source: unknown): Promise<unknown> {
+    const kind = classifyMarketplaceSource(source);
+    if (kind !== "directory" && kind !== "file") return source;
+    const path = (source as { source: { path: string } }).source.path;
+    if (await isDirectory(path)) return { source: { source: "directory", path } };
+    if (await isFile(path)) {
+      if (!path.endsWith(".json")) {
+        throw new CliError(`File path must point to a .json file (marketplace.json), but got: ${path}`);
+      }
+      return { source: { source: "file", path } };
     }
+    this.logger.warn(`Path does not exist: ${pc.bold(path)}.\n  Claude Code can't load this marketplace until it does.`);
+    return source;
   }
 
   /** Best-effort name inference, shared by the --source and non---source paths — falls back to the
    * raw spec (matching the pre-inference behavior) if `spec` isn't a shape parseMarketplaceSpec can
-   * infer a name from (e.g. GitHub shorthand with a '#ref' fragment). */
+   * infer a name from (e.g. GitHub shorthand with an empty trailing '@' ref). */
   private inferName(spec: string): string {
     try {
-      return parseMarketplaceSpec(spec).inferredName;
+      return parseMarketplaceSpec(spec, { cwd: this.cwd }).inferredName;
     } catch {
       return spec;
     }

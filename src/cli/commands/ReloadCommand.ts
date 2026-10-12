@@ -27,7 +27,13 @@ export class ReloadCommand implements Command {
 
     const moduleNames = await this.moduleListFile.read(listFilePath);
     this.logger.debug(`Reloading modules [${pc.bold(moduleNames.join(", "))}] from ${pc.bold(listFilePath)}.`);
-    const { report, enabledPluginNames, marketplaceNames, uncachedMarketplaceNames } = await this.applyModulesUseCase
+    const {
+      report,
+      enabledPluginNames,
+      marketplaceNames,
+      uncachedMarketplaceNames,
+      pendingSettingsMarketplaceNames,
+    } = await this.applyModulesUseCase
       .run(moduleNames, this.scope, this.cwd, false, this.install, this.dryRun)
       .catch((err: unknown) => {
         // A plain "Module 'x' does not exist" is disconnected from *why* reload tried to load it —
@@ -44,7 +50,13 @@ export class ReloadCommand implements Command {
     // Mirrors EnableCommand: a caching failure that survives --install fails the run, since
     // --install's whole point is to make the plugin usable, not just to have attempted it.
     if (this.install && !this.dryRun) {
-      assertInstallCached({ report, enabledPluginNames, marketplaceNames, uncachedMarketplaceNames });
+      assertInstallCached({
+        report,
+        enabledPluginNames,
+        marketplaceNames,
+        uncachedMarketplaceNames,
+        pendingMarketplaceNames: pendingSettingsMarketplaceNames,
+      });
     }
   }
 

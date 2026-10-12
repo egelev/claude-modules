@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Harness, githubSource } from "./helpers/harness.js";
+import { Harness, githubSource, settingsSource } from "./helpers/harness.js";
 
 describe("enable", () => {
   let h: Harness;
@@ -56,6 +56,23 @@ describe("enable", () => {
 
     const settings = await h.readSettings("local");
     expect(settings.extraKnownMarketplaces).toEqual({ mp: githubSource("owner/repo") });
+  });
+
+  it("writes a legacy module source into settings.json in the shape Claude Code accepts, replacing an old copy", async () => {
+    // Both the module and the scope hold `{source:"local"}`, as an older version of this tool wrote
+    // them — a source type Claude Code has no schema for.
+    const legacy = { source: { source: "local", path: "/home/someone/mp" } };
+    await h.writeModule("legacy", { enabledPlugins: { "a@old-mp": true }, extraKnownMarketplaces: { "old-mp": legacy } });
+    await h.writeSettings("local", { extraKnownMarketplaces: { "old-mp": legacy } });
+
+    const result = await h.run(["enable", "legacy"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("different source");
+    const settings = await h.readSettings("local");
+    expect(settings.extraKnownMarketplaces).toEqual({
+      "old-mp": { source: { source: "directory", path: "/home/someone/mp" } },
+    });
   });
 
   it("fails when two modules declare the same marketplace differently", async () => {
@@ -344,6 +361,26 @@ describe("enable --install", () => {
 
     expect(result.code).toBe(0);
     expect(result.stderr).toContain("isn't a shape this tool can");
+  });
+
+  it("exits 0 with --install when a plugin waits on a marketplace Claude Code registers from settings.json", async () => {
+    // A fresh machine: the module's settings marketplace isn't registered yet, so its plugin can't be
+    // cached by this run — only the next session start can register it. That's pending, not failed.
+    await h.writeModule("inline", {
+      enabledPlugins: { "a@inline-mp": true },
+      extraKnownMarketplaces: { "inline-mp": settingsSource("inline-mp") },
+    });
+
+    const result = await h.run(["enable", "inline", "--install"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("add it manually");
+    expect(result.stderr).not.toContain("Run 'claude plugin marketplace add'");
+    expect(result.stderr).not.toContain("still not cached by Claude Code after --install");
+    expect(result.stdout).toContain("registers it from settings.json at the next session start");
+    expect(result.stdout).toContain("Start a Claude Code session");
+    expect(result.stdout).toContain("These can be cached once Claude Code registers their marketplace");
+    expect(result.stdout).not.toContain("Automatic install did not cache");
   });
 
   it("exits 2 when --install can't fix it because claude is unreachable", async () => {

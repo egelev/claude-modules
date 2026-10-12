@@ -7,6 +7,7 @@ import { KnownMarketplacesCache } from "../../core/KnownMarketplacesCache.js";
 import { MarketplaceCacheInstaller } from "../../core/MarketplaceCacheInstaller.js";
 import { PluginCacheInstaller } from "../../core/PluginCacheInstaller.js";
 import { parsePluginKey } from "../../core/pluginKey.js";
+import { Scope } from "../../core/types.js";
 import { bumpPatch } from "../../core/semver.js";
 import { warnIfNonPortableMarketplace } from "../../core/marketplacePortability.js";
 import { InvalidJsonError, UnknownMarketplaceError } from "../../util/errors.js";
@@ -92,7 +93,12 @@ export class InstallCommand implements Command {
     // cache without silently going live everywhere. `enable --install`/`reload --install` pass their
     // real target scope instead (see ApplyModulesUseCase), so the side effect lands where their own
     // write is about to land anyway and this neutralize step is unique to this standalone command.
-    const freshlyInstalled = await this.pluginCacheInstaller.ensureCached([full], this.dryRun);
+    const freshlyInstalled = await this.pluginCacheInstaller.ensureCached(
+      [full],
+      this.dryRun,
+      Scope.User,
+      module.extraKnownMarketplaces
+    );
     if (freshlyInstalled.length > 0) {
       await this.pluginCacheInstaller.neutralizeUserScopeEnablement(freshlyInstalled);
     }

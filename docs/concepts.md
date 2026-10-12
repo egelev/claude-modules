@@ -75,12 +75,16 @@ Recognized source shapes:
 
 | Shape | JSON |
 |---|---|
-| GitHub | `{"source": {"source": "github", "repo": "owner/repo"}}` |
-| Git URL | `{"source": {"source": "git", "url": "https://..."}}` |
-| Local path | `{"source": {"source": "local", "path": "/path/to/mp"}}` |
+| GitHub | `{"source": {"source": "github", "repo": "owner/repo", "ref": "v2.0"}}` (`ref` optional) |
+| Git URL | `{"source": {"source": "git", "url": "https://.../mp.git", "ref": "main"}}` (`ref` optional) |
+| Hosted file | `{"source": {"source": "url", "url": "https://.../marketplace.json"}}` |
+| Local directory | `{"source": {"source": "directory", "path": "/path/to/mp"}}` |
+| Local file | `{"source": {"source": "file", "path": "/path/to/mp/.claude-plugin/marketplace.json"}}` |
+| Inline catalog | `{"source": {"source": "settings", "name": "mp", "plugins": [...]}}` |
 
-Anything else is treated as unrecognized, and therefore as **not portable** — `export` warns about
-it. See [Marketplaces](marketplaces.md#marketplace-add) for the caveat on the git and local shapes.
+These are Claude Code's own marketplace source types. Anything else is treated as unrecognized, and
+therefore as **not portable** — `export` warns about it. See
+[Marketplaces → Spec detection](marketplaces.md#spec-detection) for which spec produces which shape.
 
 ---
 

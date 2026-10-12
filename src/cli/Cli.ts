@@ -446,6 +446,7 @@ export class Cli {
           values.name,
           values.source,
           values.module,
+          this.cwd,
           marketplaceRegistry,
           moduleStore,
           marketplaceCacheInstaller,

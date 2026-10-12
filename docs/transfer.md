@@ -140,8 +140,18 @@ Treat modules as portable **role definitions**, not lockfiles.
 ### Non-portable marketplace sources
 
 When `plugin install` resolves a marketplace from the global registry or from Claude Code's own
-cache, it copies the source onto the module as a snapshot. A non-`github` source — a local path, say
-— won't mean anything on another machine. Both `plugin install` and `export` warn when they see one.
+cache, it copies the source onto the module as a snapshot. A source that names a path on this machine
+won't mean anything on another one. `plugin install`, `create --from-scope`, and `export` warn when
+they see one.
+
+| Travels                                                     | Machine-specific                          |
+| ----------------------------------------------------------- | ----------------------------------------- |
+| `github`                                                    | `directory`, `file`                       |
+| `git` with a remote URL (`https://`, `ssh://`, `git@host:`) | `git` with a `file://` URL or a path      |
+| `url` with an `http(s)` URL                                 | `local`, stored by older versions         |
+| `settings` (an inline catalog)                              |                                           |
+
+A source shape this tool doesn't recognize gets the same warning, rather than being assumed safe.
 
 ### Plugin-level `dependencies`
 

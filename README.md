@@ -251,6 +251,68 @@ detect drift. One per scope:
 
 ---
 
+## Practical use cases
+
+### A marketplace in a repository subdirectory
+
+Not every marketplace sits at the root of its repository. The example mods in
+[`anthropics/claude-code-playground`](https://github.com/anthropics/claude-code-playground/tree/main/claude-code/mods)
+keep their `.claude-plugin/marketplace.json` under `claude-code/mods/`. `claude plugin marketplace
+add` has no option for that. Pointing a `github` source's `path` at that file doesn't work either:
+Claude Code finds the file, but resolves the plugins' `./relative` paths from the repository root,
+so installs fail with `Source path does not exist`.
+
+What works is an inline `settings` marketplace. The catalog lives in the source itself, and each
+plugin points at its own folder with a `git-subdir` source. Nothing in it is machine-specific, so it
+travels with the module:
+
+```bash
+cat > ccp-mods.json <<'EOF'
+{
+  "source": {
+    "source": "settings",
+    "name": "claude-code-playground-mods",
+    "owner": { "name": "Claude Code DevRel" },
+    "plugins": [
+      { "name": "blast-radius",   "source": { "source": "git-subdir", "url": "anthropics/claude-code-playground", "path": "claude-code/mods/blast-radius" } },
+      { "name": "replay-theater", "source": { "source": "git-subdir", "url": "anthropics/claude-code-playground", "path": "claude-code/mods/replay-theater" } },
+      { "name": "token-weather",  "source": { "source": "git-subdir", "url": "anthropics/claude-code-playground", "path": "claude-code/mods/token-weather" } }
+    ]
+  }
+}
+EOF
+
+claude-modules marketplace add claude-code-playground-mods --name claude-code-playground-mods \
+  --module <my_module> --source "$(cat ccp-mods.json)"
+claude-modules plugin install <my_module> replay-theater@claude-code-playground-mods
+```
+
+- **Keep the outer `{"source": …}` wrapper.** `--source` is stored verbatim as the
+  `extraKnownMarketplaces` value.
+- **`--name` must equal the `name` inside the source.** Claude Code rejects a `settings` marketplace
+  whose name differs from its key, and the name is also what plugin keys use after `@`.
+- **Run it once more without `--module`** to keep the source in the global registry too, so later
+  `plugin install`s into other modules pick it up from there.
+
+On another machine, `import` the module and `enable` it. That writes the entry into the scope's
+`settings.json`, and Claude Code registers a `settings` marketplace itself at the next session start
+(at `project` scope, once you accept the workspace trust prompt). There's no `claude plugin
+marketplace add` form for it, so `enable --install` reports the marketplace and its plugins as
+pending rather than failing. If `status` still reports a plugin as not cached after that session
+start, run `claude-modules reload --install`.
+
+> **Replacing a local copy?** If the scope's `settings.json` already declares the same marketplace
+> name with another source — say a `directory` pointing at a local clone — `enable` keeps that entry
+> and warns. Delete it from `settings.json` by hand first. Don't use `claude plugin marketplace
+> remove`, which also uninstalls the marketplace's plugins and deletes their data.
+
+The trade-off is that the plugin list is fixed: a plugin added upstream won't appear until you add
+it to your JSON. If you'd rather not maintain that, host a small repository of your own with a root
+`marketplace.json` listing the same `git-subdir` entries, and add it with plain `marketplace add
+<owner>/<repo>`.
+
+---
+
 ## Commands
 
 | Command                                   | What it does                                                       |                                                 |

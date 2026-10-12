@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import { dryRunTag } from "../util/outputStyle.js";
 import { KnownMarketplacesCache } from "./KnownMarketplacesCache.js";
-import { marketplaceSpecFromSource } from "./marketplaceSpec.js";
+import { marketplaceAddPlan } from "./marketplaceSpec.js";
 import { ClaudeRunner, defaultClaudeRunner } from "./ClaudeRunner.js";
 import { MarketplaceSource, Scope } from "./types.js";
 import { Logger } from "../util/Logger.js";
@@ -33,11 +33,14 @@ export class MarketplaceCacheInstaller {
         continue;
       }
       if (dryRun) {
-        const spec = marketplaceSpecFromSource(source);
+        const plan = marketplaceAddPlan(source);
         const action =
-          spec !== undefined
-            ? `would run 'claude plugin marketplace add ${spec} --scope ${scope}'`
-            : "would need manual addition — its source isn't a shape this tool can convert to a CLI spec";
+          plan.kind === "cli"
+            ? `would run 'claude plugin marketplace add ${plan.args.join(" ")} --scope ${scope}'`
+            : plan.kind === "from-settings"
+              ? `nothing to run: it has ${plan.description}, which Claude Code registers itself from ` +
+                "settings.json at the next session start"
+              : "would need manual addition — its source isn't a shape this tool can convert to a CLI spec";
         this.logger.info(`${dryRunTag()} Marketplace '${pc.bold(name)}' isn't known to Claude Code — ${action}.`);
         continue;
       }
@@ -55,8 +58,18 @@ export class MarketplaceCacheInstaller {
   }
 
   private async installOne(name: string, source: MarketplaceSource, scope: Scope): Promise<void> {
-    const spec = marketplaceSpecFromSource(source);
-    if (spec === undefined) {
+    const plan = marketplaceAddPlan(source);
+    if (plan.kind === "from-settings") {
+      // Not a failure: there's no CLI form to run, and none is needed — the settings write is what
+      // registers it. Info, not a warning, so a portable module doesn't read as broken.
+      this.logger.info(
+        `Marketplace '${pc.bold(name)}' isn't known to Claude Code yet. It has ${plan.description}, which ` +
+          `'claude plugin marketplace add' can't express,\n  so Claude Code registers it itself from settings.json ` +
+          `at the next session start in a scope that declares it (e.g. after 'enable').`
+      );
+      return;
+    }
+    if (plan.kind === "unknown") {
       this.logger.warn(
         `Marketplace '${pc.bold(name)}' isn't known to Claude Code, and its source isn't a shape this tool can ` +
           `turn into a 'claude plugin marketplace add' command automatically.\n  Add it manually, then retry.`
@@ -64,7 +77,8 @@ export class MarketplaceCacheInstaller {
       return;
     }
 
-    const result = await this.runClaude(["plugin", "marketplace", "add", spec, "--scope", scope], this.env);
+    const spec = plan.args.join(" ");
+    const result = await this.runClaude(["plugin", "marketplace", "add", ...plan.args, "--scope", scope], this.env);
     if (result.ok) {
       this.logger.info(
         `Marketplace '${pc.bold(name)}' wasn't known to Claude Code yet — added it now via ` +

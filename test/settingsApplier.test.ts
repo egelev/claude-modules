@@ -81,6 +81,47 @@ describe("SettingsApplier.apply", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it("replaces, without warning, an entry an older version wrote in a shape Claude Code can't load", () => {
+    const logger = new Logger(LogLevel.WARN);
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const loggingApplier = new SettingsApplier(logger);
+    const existing = {
+      extraKnownMarketplaces: {
+        local: { source: { source: "local", path: "/home/someone/mp" } },
+        pinned: { source: { source: "github", repo: "owner/repo@v2" } },
+      },
+    };
+
+    const result = loggingApplier.apply(
+      existing,
+      union([], {
+        local: { source: { source: "directory", path: "/home/someone/mp" } },
+        pinned: { source: { source: "github", repo: "owner/repo", ref: "v2" } },
+      })
+    );
+
+    expect(result.extraKnownMarketplaces).toEqual({
+      local: { source: { source: "directory", path: "/home/someone/mp" } },
+      pinned: { source: { source: "github", repo: "owner/repo", ref: "v2" } },
+    });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("still keeps, and warns about, a legacy entry that upgrades to a different source", () => {
+    const logger = new Logger(LogLevel.WARN);
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const loggingApplier = new SettingsApplier(logger);
+    const existing = { extraKnownMarketplaces: { mp: { source: { source: "local", path: "/elsewhere" } } } };
+
+    const result = loggingApplier.apply(
+      existing,
+      union([], { mp: { source: { source: "directory", path: "/home/someone/mp" } } })
+    );
+
+    expect(result.extraKnownMarketplaces!["mp"]).toEqual({ source: { source: "local", path: "/elsewhere" } });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("handles a settings file with no plugin keys at all", () => {
     const result = applier.apply({}, union(["a@mp"]));
 

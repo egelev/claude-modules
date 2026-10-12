@@ -49,3 +49,38 @@ describe("ModuleStore.remove", () => {
     expect(entries).not.toContain("junk");
   });
 });
+
+describe("ModuleStore.load", () => {
+  let h: Harness;
+  let store: ModuleStore;
+
+  beforeEach(async () => {
+    h = await Harness.create();
+    store = new ModuleStore(new Paths(h.env));
+  });
+
+  afterEach(async () => {
+    await h.cleanup();
+  });
+
+  it("upgrades marketplace sources an older version stored, without rewriting the file", async () => {
+    await h.writeModule("demo", {
+      enabledPlugins: {},
+      extraKnownMarketplaces: {
+        local: { source: { source: "local", path: "/home/someone/mp" } },
+        pinned: { source: { source: "github", repo: "owner/repo@v2" } },
+        current: { source: { source: "github", repo: "owner/other" } },
+      },
+    });
+
+    const module = await store.load("demo");
+
+    expect(module.extraKnownMarketplaces).toEqual({
+      local: { source: { source: "directory", path: "/home/someone/mp" } },
+      pinned: { source: { source: "github", repo: "owner/repo", ref: "v2" } },
+      current: { source: { source: "github", repo: "owner/other" } },
+    });
+    const onDisk = JSON.parse(await h.readFileAt(join("modules", "demo", "settings.json"), h.modulesHome));
+    expect(onDisk.extraKnownMarketplaces.local).toEqual({ source: { source: "local", path: "/home/someone/mp" } });
+  });
+});

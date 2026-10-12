@@ -24,15 +24,20 @@ export class EnableCommand implements Command {
   ) {}
 
   async execute(): Promise<void> {
-    const { report, enabledPluginNames, marketplaceNames, uncachedMarketplaceNames } =
-      await this.applyModulesUseCase.run(
-        this.moduleNames,
-        this.scope,
-        this.cwd,
-        this.only,
-        this.install,
-        this.dryRun
-      );
+    const {
+      report,
+      enabledPluginNames,
+      marketplaceNames,
+      uncachedMarketplaceNames,
+      pendingSettingsMarketplaceNames,
+    } = await this.applyModulesUseCase.run(
+      this.moduleNames,
+      this.scope,
+      this.cwd,
+      this.only,
+      this.install,
+      this.dryRun
+    );
 
     this.logger.section();
     // The merge base always comes from the scope's canonical saved list (if any), regardless of
@@ -80,7 +85,13 @@ export class EnableCommand implements Command {
     // Checked after the settings write and any --save, so both still happen even when the
     // install attempt left something missing — a caching failure never undoes the primary write.
     if (this.install && !this.dryRun) {
-      assertInstallCached({ report, enabledPluginNames, marketplaceNames, uncachedMarketplaceNames });
+      assertInstallCached({
+        report,
+        enabledPluginNames,
+        marketplaceNames,
+        uncachedMarketplaceNames,
+        pendingMarketplaceNames: pendingSettingsMarketplaceNames,
+      });
     }
   }
 }

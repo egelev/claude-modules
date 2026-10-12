@@ -46,26 +46,45 @@ add <spec> --scope user` on your behalf — the same best-effort cache-warming
 is logged explicitly; a failure (no `claude` on `PATH`, no network) is a **warning, not a hard
 error** — the registry write above still succeeds either way.
 
+Some sources have no `claude plugin marketplace add` form at all: an inline `settings` source, a
+`github` or `git` source with a custom `path`, and a `url` source with request headers. Claude Code
+registers these itself from `settings.json` at the next session start, so nothing is run for them —
+an info line says so, and [`enable`](applying.md#enable) writes the entry where Claude Code will
+find it. See the README's
+[practical use cases](../README.md#a-marketplace-in-a-repository-subdirectory) for a worked example.
+
 ### Spec detection
 
-| Spec form | Detected as |
+Each spec is stored as the source object Claude Code's own `claude plugin marketplace add` would
+store for it (checked against Claude Code 2.1.295), so the entry `enable` writes is one Claude Code
+can load:
+
+| Spec | Stored source |
 |---|---|
-| `owner/repo` | GitHub shorthand |
-| `owner/repo@v2.0` | GitHub shorthand pinned to a branch/tag — the name is still inferred from `owner/repo` alone |
-| `https://...` or `git@...` | git URL (pin with a trailing `#ref`) |
-| anything else | local path |
+| `owner/repo` | `{"source": "github", "repo": "owner/repo"}` |
+| `owner/repo@v2.0` or `owner/repo#v2.0` | `{"source": "github", "repo": "owner/repo", "ref": "v2.0"}` |
+| `https://host/mp.git#main` (or a URL containing `/_git/`) | `{"source": "git", "url": "https://host/mp.git", "ref": "main"}` |
+| `https://github.com/owner/repo`, `https://gitlab.com/group/project` | `git`, with `.git` appended to the URL |
+| any other `https://…` URL | `{"source": "url", "url": "…"}` — a hosted `marketplace.json` |
+| `git@host:team/mp.git#main` | `{"source": "git", "url": "git@host:team/mp.git", "ref": "main"}` |
+| `./dir`, `../dir`, `/dir`, `~/dir` | `{"source": "directory", "path": "<absolute path>"}` |
+| a path to a `.json` file | `{"source": "file", "path": "<absolute path>"}` |
+| anything else | treated as a path relative to the current directory, as above |
 
-A local path ending in `marketplace.json` infers its name from the parent directory; a trailing `/`
-or `.git` is stripped.
+The name is inferred from the repository or the last path segment (from the parent directory for a
+`marketplace.json`), without the ref or a trailing `/` or `.git`.
 
-> [!WARNING]
-> **`owner/repo#ref` is an error**, not a silent misparse — GitHub shorthand doesn't support `#ref`
-> pinning. The message steers you to `owner/repo@ref` or the full git URL.
+Paths are resolved to absolute, with `~` expanded. Claude Code resolves a relative `path` against
+whichever project a session starts in, so a relative one would point somewhere different in every
+repo. An existing path is checked the way Claude Code checks it: a directory, or a `.json` file. Any
+other file is refused. A path that doesn't exist yet is a warning, not an error.
 
-> **Caveat.** Only the GitHub shorthand has a documented `settings.json` representation. The git-URL
-> and local-path shapes this tool writes are **unverified against real Claude Code output**. Check
-> the registered entry with [`marketplace list`](#marketplace-list), or bypass detection entirely
-> with `--source '<json>'`.
+Anything the spec can't express, such as a `path` inside a repo or `sparsePaths`, goes in
+`--source '<json>'`.
+
+> Sources stored by older versions of `claude-modules` — `{"source": "local"}`, or a ref kept inside
+> `repo` or `url` — are upgraded to these shapes when they're read, and `enable` replaces an old copy
+> of one in a scope's `settings.json`.
 
 ---
 
