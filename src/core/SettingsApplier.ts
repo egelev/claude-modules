@@ -3,6 +3,7 @@ import { ClaudeSettings } from "./types.js";
 import { ResolvedModules } from "./ModuleResolver.js";
 import { Logger } from "../util/Logger.js";
 import { deepEqualJson } from "../util/deepEqualJson.js";
+import { upgradeLegacyMarketplaceSource } from "./marketplaceSpec.js";
 
 /**
  * Computes settings.json mutations for enabling/disabling plugins. Plugin keys are never removed,
@@ -30,9 +31,19 @@ export class SettingsApplier {
 
     const extraKnownMarketplaces = { ...(existing.extraKnownMarketplaces ?? {}) };
     for (const [marketplaceName, source] of Object.entries(union.extraKnownMarketplaces)) {
+      const existingSource = extraKnownMarketplaces[marketplaceName];
       if (!(marketplaceName in extraKnownMarketplaces)) {
         extraKnownMarketplaces[marketplaceName] = source;
-      } else if (!deepEqualJson(extraKnownMarketplaces[marketplaceName], source)) {
+      } else if (deepEqualJson(existingSource, source)) {
+        // Already declared exactly as the module declares it.
+      } else if (deepEqualJson(upgradeLegacyMarketplaceSource(existingSource), source)) {
+        // Same marketplace, in a shape an older version of this tool wrote and Claude Code can't load
+        // (e.g. `{source:"local"}`): replacing it is an upgrade, not a conflict.
+        extraKnownMarketplaces[marketplaceName] = source;
+        this.logger.debug(
+          `Upgraded marketplace '${pc.bold(marketplaceName)}' in this scope to Claude Code's source shape.`
+        );
+      } else {
         // Declare-time conflicts (moduleUnion.ts) are thrown, because nothing has been written yet
         // and refusing costs nothing. Here the target file already exists and is already in use, so
         // a hard failure would block an otherwise-fine apply over something often harmless (e.g. two

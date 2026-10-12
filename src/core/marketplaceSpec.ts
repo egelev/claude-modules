@@ -1,60 +1,130 @@
-import { basename, dirname } from "node:path";
-import { MarketplaceSource } from "./types.js";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import type { MarketplaceSource } from "./types.js";
 
 export interface ParsedMarketplaceSpec {
   inferredName: string;
   source: MarketplaceSource;
 }
 
+export interface ParseMarketplaceSpecOptions {
+  /** What a relative path resolves against. Defaults to the process's cwd. */
+  cwd?: string;
+  /** What a leading `~` expands to. Defaults to the OS home directory. */
+  home?: string;
+}
+
 const GITHUB_SHORTHAND = /^[\w.-]+\/[\w.-]+$/;
+/** Claude Code's own split for shorthand: up to the first '@' or '#' is the repo, the rest the ref. */
+const SHORTHAND_WITH_REF = /^([^#@]+)(?:[#@](.+))?$/;
+const SSH_GIT_URL = /^[\w.-]+@[\w.-]+:/;
 
 /**
- * Best-effort auto-detection mirroring `/plugin marketplace add <spec>`. Only the GitHub-shorthand
- * shape (`owner/repo`, optionally pinned to a branch/tag with a trailing `@ref` — see
- * https://code.claude.com/docs/en/plugin-marketplaces#plugin-marketplace-add) has a documented
- * settings.json representation; git-URL and local-path shapes below are unverified and should be
- * confirmed against real Claude Code output before being relied upon — use --source '<json>' to
- * bypass this entirely.
+ * Turns a `marketplace add <spec>` string into the source object Claude Code itself would store for
+ * `claude plugin marketplace add <spec>` — mirroring its parser and source schema as of Claude Code
+ * 2.1.295 (see https://code.claude.com/docs/en/plugins/marketplace-reference#marketplace-sources), so
+ * whatever lands in settings.json's extraKnownMarketplaces is a shape Claude Code can load:
+ *
+ * - `./dir`, `../dir`, `/dir`, `~/dir` → `directory` with an absolute path; a `.json` path → `file`.
+ * - `https://…` → `git` for a clone URL (`.git`, `/_git/`, or a github.com/gitlab.com repo page,
+ *   normalized to end in `.git`), otherwise `url` — a hosted marketplace.json. `#ref` → `ref`.
+ * - `user@host:path` → `git`, with `#ref` → `ref`.
+ * - `owner/repo`, `owner/repo@ref`, `owner/repo#ref` → `github`, with the ref in its own field.
+ *
+ * Unlike Claude Code, anything else is still accepted as a path relative to `cwd`, rather than
+ * rejected — the behavior this tool has always had, now producing a valid `directory`/`file` shape.
+ * Use --source '<json>' for anything this can't express (e.g. a `path` or `sparsePaths`).
  */
-export function parseMarketplaceSpec(spec: string): ParsedMarketplaceSpec {
-  const withoutFragment = spec.split("#")[0]!;
+export function parseMarketplaceSpec(spec: string, options: ParseMarketplaceSpecOptions = {}): ParsedMarketplaceSpec {
+  const cwd = options.cwd ?? process.cwd();
+  const home = options.home ?? homedir();
 
-  if (GITHUB_SHORTHAND.test(spec)) {
-    const repoName = spec.split("/")[1]!;
-    return { inferredName: repoName, source: { source: { source: "github", repo: spec } } };
+  // Explicit paths first, as Claude Code checks them: './plugins' would otherwise pass for
+  // 'owner/repo' shorthand, since '.' is a valid owner character.
+  if (/^\.{1,2}[\\/]/.test(spec) || /^~(?:[\\/]|$)/.test(spec) || isAbsolute(spec)) {
+    return pathSpec(spec, cwd, home);
   }
 
-  // GitHub shorthand can be pinned to a branch/tag via a trailing @ref (mirrors the git branch's
-  // #ref below, stored verbatim in `repo` the same way). The `atIndex !== -1` guard matters: without
-  // it, a no-'@' spec like a local path 'owner/repo/' could slice(0, -1) into something that
-  // spuriously re-matches GITHUB_SHORTHAND once its last character is dropped.
-  const atIndex = spec.indexOf("@");
-  if (atIndex !== -1) {
-    const beforeRef = spec.slice(0, atIndex);
-    if (GITHUB_SHORTHAND.test(beforeRef)) {
-      const repoName = beforeRef.split("/")[1]!;
-      return { inferredName: repoName, source: { source: { source: "github", repo: spec } } };
-    }
+  if (/^https?:\/\//i.test(spec)) {
+    const [base, ref] = splitRef(spec);
+    const inferredName = inferNameFromPathLike(base);
+    const cloneUrl = gitCloneUrl(base);
+    return cloneUrl !== undefined
+      ? { inferredName, source: { source: { source: "git", url: cloneUrl, ...(ref !== undefined && { ref }) } } }
+      : { inferredName, source: { source: { source: "url", url: base } } };
   }
 
-  if (/^https?:\/\//.test(spec) || spec.startsWith("git@")) {
-    const inferredName = inferNameFromPathLike(withoutFragment);
-    return { inferredName, source: { source: { source: "git", url: spec } } };
+  if (SSH_GIT_URL.test(spec)) {
+    const [url, ref] = splitRef(spec);
+    return {
+      inferredName: inferNameFromPathLike(url),
+      source: { source: { source: "git", url, ...(ref !== undefined && { ref }) } },
+    };
   }
 
-  // A spec that's shorthand *except* for a trailing #fragment isn't a local path — it's someone
-  // expecting git-URL-style ref pinning via '#', which shorthand doesn't support (use '@ref' above
-  // instead, or the full git URL, both suggested in the error below).
-  if (spec !== withoutFragment && GITHUB_SHORTHAND.test(withoutFragment)) {
-    const ref = spec.slice(withoutFragment.length + 1);
+  if (/^[\w.-]+\/[\w.-]+[@#]$/.test(spec)) {
     throw new Error(
-      `GitHub shorthand doesn't support '#ref' pinning — use '@ref' instead (e.g. ` +
-        `'${withoutFragment}@${ref}'), or the full git URL: https://github.com/${withoutFragment}.git#${ref}`
+      `'${spec}' ends in an empty ref — drop the trailing '${spec.slice(-1)}', or name a branch or tag after it.`
     );
   }
+  const shorthand = SHORTHAND_WITH_REF.exec(spec);
+  if (shorthand !== null && GITHUB_SHORTHAND.test(shorthand[1]!)) {
+    const repo = shorthand[1]!;
+    const ref = shorthand[2];
+    return {
+      inferredName: repo.split("/")[1]!,
+      source: { source: { source: "github", repo, ...(ref !== undefined && { ref }) } },
+    };
+  }
 
-  const inferredName = inferNameFromPathLike(withoutFragment);
-  return { inferredName, source: { source: { source: "local", path: spec } } };
+  return pathSpec(spec, cwd, home);
+}
+
+/** A path spec → `file` (a `.json` path, as Claude Code requires of a file source) or `directory`,
+ * always absolute: Claude Code resolves a relative `path` against whichever project a session starts
+ * in, which would make the same module point somewhere different in every repo. A `#` stays part of
+ * the path, as it does in Claude Code. */
+function pathSpec(spec: string, cwd: string, home: string): ParsedMarketplaceSpec {
+  const expanded = spec === "~" ? home : /^~[\\/]/.test(spec) ? join(home, spec.slice(2)) : spec;
+  const path = resolve(cwd, expanded);
+  return {
+    inferredName: inferNameFromPathLike(spec.split("#")[0]!),
+    source: { source: { source: path.endsWith(".json") ? "file" : "directory", path } },
+  };
+}
+
+/** Splits a trailing `#ref` off a URL; an empty ref counts as none. */
+function splitRef(spec: string): [string, string | undefined] {
+  const hashIndex = spec.indexOf("#");
+  if (hashIndex === -1) return [spec, undefined];
+  const ref = spec.slice(hashIndex + 1);
+  return [spec.slice(0, hashIndex), ref.length > 0 ? ref : undefined];
+}
+
+/**
+ * The URL to clone if an http(s) URL names a git repository, mirroring Claude Code: a URL ending in
+ * `.git` or containing `/_git/` (Azure DevOps) as-is, and a github.com `owner/repo` or gitlab.com
+ * `group/…/project` page with `.git` appended. Undefined for anything else, which Claude Code treats
+ * as a hosted marketplace.json instead.
+ */
+function gitCloneUrl(url: string): string | undefined {
+  if (url.endsWith(".git") || url.includes("/_git/")) return url;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  if (parsed.search !== "") return undefined;
+  const segments = parsed.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
+  const host = parsed.hostname.toLowerCase();
+  const isRepoPage =
+    host === "github.com"
+      ? segments.length === 2
+      : host === "gitlab.com"
+        ? segments.length >= 2 && segments[0] !== "api" && !segments.includes("-")
+        : false;
+  return isRepoPage ? `${url.replace(/\/+$/, "")}.git` : undefined;
 }
 
 function inferNameFromPathLike(pathLike: string): string {
@@ -65,7 +135,8 @@ function inferNameFromPathLike(pathLike: string): string {
 /**
  * Every marketplace source type Claude Code itself accepts in `extraKnownMarketplaces` (see
  * https://code.claude.com/docs/en/plugins/marketplace-reference#marketplace-sources), plus `local` —
- * the shape this tool's own parseMarketplaceSpec writes for a path spec.
+ * the shape older versions of this tool wrote for a path spec, which Claude Code has no schema for
+ * (see upgradeLegacyMarketplaceSource).
  */
 export type MarketplaceSourceKind =
   | "github"
@@ -190,6 +261,52 @@ export function marketplaceAddPlan(source: MarketplaceSource): MarketplaceAddPla
     }
     case "unrecognized":
       return { kind: "unknown" };
+  }
+}
+
+/**
+ * Rewrites a source stored by an older version of this tool into the shape Claude Code accepts —
+ * what parseMarketplaceSpec produces today for the same spec:
+ * - `local` → `file` for a `.json` path, otherwise `directory`. The path is kept as stored, since the
+ *   cwd a relative one was typed in is unknown.
+ * - `github` with `repo: "owner/repo@ref"` → `{ repo, ref }`.
+ * - `git` with `url: "…#ref"` → `{ url, ref }`.
+ *
+ * Every other field is preserved, and anything already current — or unrecognized — is returned
+ * as-is (the same reference), so applying it twice changes nothing. Applied wherever stored sources
+ * are read (`normalizeModule`, `MarketplaceRegistry`, `create --from-scope`), never written back on
+ * its own: the next ordinary save persists the new shape.
+ */
+export function upgradeLegacyMarketplaceSource(source: MarketplaceSource): MarketplaceSource {
+  const inner = innerSource(source);
+  if (inner === undefined) return source;
+  const upgraded = upgradeLegacyInner(inner);
+  return upgraded === inner ? source : { ...(source as Record<string, unknown>), source: upgraded };
+}
+
+function upgradeLegacyInner(inner: Record<string, unknown>): Record<string, unknown> {
+  switch (inner.source) {
+    case "local": {
+      const path = stringField(inner, "path");
+      return path === undefined ? inner : { ...inner, source: path.endsWith(".json") ? "file" : "directory" };
+    }
+    case "github": {
+      const repo = stringField(inner, "repo");
+      if (repo === undefined || inner.ref !== undefined) return inner;
+      const match = SHORTHAND_WITH_REF.exec(repo);
+      const [, bareRepo, ref] = match ?? [];
+      return bareRepo !== undefined && ref !== undefined && GITHUB_SHORTHAND.test(bareRepo)
+        ? { ...inner, repo: bareRepo, ref }
+        : inner;
+    }
+    case "git": {
+      const url = stringField(inner, "url");
+      if (url === undefined || inner.ref !== undefined) return inner;
+      const [base, ref] = splitRef(url);
+      return ref === undefined ? inner : { ...inner, url: base, ref };
+    }
+    default:
+      return inner;
   }
 }
 

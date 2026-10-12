@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Harness, githubSource } from "./helpers/harness.js";
 import { AddMarketplaceCommand } from "../src/cli/commands/AddMarketplaceCommand.js";
@@ -54,12 +55,12 @@ describe("marketplace add/remove (global registry, no --module)", () => {
     expect(registry.marketplaces.repo).toBeUndefined();
   });
 
-  it("registers an @ref-pinned marketplace, storing the ref verbatim", async () => {
+  it("registers an @ref-pinned marketplace with the ref in its own field, as Claude Code stores it", async () => {
     const result = await h.run(["marketplace", "add", "owner/repo@v2.0", "--name", "mp"]);
 
     expect(result.code).toBe(0);
     const registry = JSON.parse(await h.readFileAt("settings.json", h.modulesHome));
-    expect(registry.marketplaces.mp).toEqual(githubSource("owner/repo@v2.0"));
+    expect(registry.marketplaces.mp).toEqual({ source: { source: "github", repo: "owner/repo", ref: "v2.0" } });
   });
 
   it("infers the name from an @ref-pinned spec, excluding the ref", async () => {
@@ -67,7 +68,7 @@ describe("marketplace add/remove (global registry, no --module)", () => {
 
     expect(result.code).toBe(0);
     const registry = JSON.parse(await h.readFileAt("settings.json", h.modulesHome));
-    expect(registry.marketplaces.repo).toEqual(githubSource("owner/repo@v2.0"));
+    expect(registry.marketplaces.repo).toEqual({ source: { source: "github", repo: "owner/repo", ref: "v2.0" } });
     expect(registry.marketplaces["repo@v2.0"]).toBeUndefined();
   });
 
@@ -86,26 +87,58 @@ describe("marketplace add/remove (global registry, no --module)", () => {
     expect(registry.marketplaces["repo@v2.0"]).toBeUndefined();
   });
 
-  it("does not warn about an unverified source for an @ref-pinned spec", async () => {
-    const result = await h.run(["marketplace", "add", "owner/repo@v2.0", "--name", "mp"]);
-
-    expect(result.code).toBe(0);
-    expect(result.output).not.toContain("unverified against real Claude Code output");
-  });
-
-  it("still warns about an unverified source for a non-GitHub spec", async () => {
-    const result = await h.run(["marketplace", "add", "./local/path", "--name", "mp"]);
-
-    expect(result.code).toBe(0);
-    expect(result.output).toContain("unverified against real Claude Code output");
-  });
-
-  it("fails with an error recommending '@ref' when shorthand is given a '#ref' fragment instead", async () => {
+  it("accepts a #ref-pinned shorthand, as Claude Code does", async () => {
     const result = await h.run(["marketplace", "add", "owner/repo#v2.0"]);
 
+    expect(result.code).toBe(0);
+    const registry = JSON.parse(await h.readFileAt("settings.json", h.modulesHome));
+    expect(registry.marketplaces.repo).toEqual({ source: { source: "github", repo: "owner/repo", ref: "v2.0" } });
+  });
+
+  it("registers an existing local directory as an absolute directory source, with no warning", async () => {
+    await h.writeFileAt("plugins/.claude-plugin/marketplace.json", "{}");
+
+    const result = await h.run(["marketplace", "add", "./plugins", "--name", "mp"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("Path does not exist");
+    const registry = JSON.parse(await h.readFileAt("settings.json", h.modulesHome));
+    expect(registry.marketplaces.mp).toEqual({ source: { source: "directory", path: join(h.repoRoot, "plugins") } });
+  });
+
+  it("registers a local marketplace.json as a file source", async () => {
+    const file = await h.writeFileAt("mp/.claude-plugin/marketplace.json", "{}");
+
+    const result = await h.run(["marketplace", "add", file, "--name", "mp"]);
+
+    expect(result.code).toBe(0);
+    const registry = JSON.parse(await h.readFileAt("settings.json", h.modulesHome));
+    expect(registry.marketplaces.mp).toEqual({ source: { source: "file", path: file } });
+  });
+
+  it("warns, but still registers, a path that doesn't exist", async () => {
+    const result = await h.run(["marketplace", "add", "./not-there", "--name", "mp"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).toContain("Path does not exist");
+    const registry = JSON.parse(await h.readFileAt("settings.json", h.modulesHome));
+    expect(registry.marketplaces.mp).toEqual({ source: { source: "directory", path: join(h.repoRoot, "not-there") } });
+  });
+
+  it("refuses a path to a file that isn't a .json marketplace file, as Claude Code does", async () => {
+    await h.writeFileAt("notes.txt", "hello");
+
+    const result = await h.run(["marketplace", "add", "./notes.txt", "--name", "mp"]);
+
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain("@ref");
-    expect(result.stderr).toContain("owner/repo@v2.0");
+    expect(result.stderr).toContain("must point to a .json file");
+  });
+
+  it("no longer warns that a non-GitHub source shape is unverified", async () => {
+    const result = await h.run(["marketplace", "add", "https://example.com/mp.git", "--name", "mp"]);
+
+    expect(result.code).toBe(0);
+    expect(result.output).not.toContain("unverified");
   });
 
   it("fails with a clear error for malformed --source JSON, not a raw stack trace", async () => {
@@ -120,19 +153,19 @@ describe("marketplace add/remove (global registry, no --module)", () => {
   it("falls back to the raw spec as the name when --source is given and the spec itself doesn't parse", async () => {
     // Exercises AddMarketplaceCommand's separate inferName() catch fallback: --source bypasses
     // auto-detection for the *source*, but the *name* still falls back to parseMarketplaceSpec(spec)
-    // when --name isn't given — and here 'owner/repo#v2.0' is rejected by that parser (shorthand
-    // doesn't support '#ref'), so the name falls back to the spec string verbatim.
+    // when --name isn't given — and here 'owner/repo@' is rejected by that parser (an empty ref), so
+    // the name falls back to the spec string verbatim.
     const result = await h.run([
       "marketplace",
       "add",
-      "owner/repo#v2.0",
+      "owner/repo@",
       "--source",
       JSON.stringify(githubSource("owner/repo")),
     ]);
 
     expect(result.code).toBe(0);
     const registry = JSON.parse(await h.readFileAt("settings.json", h.modulesHome));
-    expect(registry.marketplaces["owner/repo#v2.0"]).toEqual(githubSource("owner/repo"));
+    expect(registry.marketplaces["owner/repo@"]).toEqual(githubSource("owner/repo"));
   });
 
   it("reports what would happen under --dry-run with an explicit --source, without writing", async () => {
@@ -320,6 +353,19 @@ describe("marketplace list", () => {
     expect(result.stdout).toContain("No marketplaces registered");
   });
 
+  it("lists a source stored by an older version in the shape Claude Code accepts", async () => {
+    await h.writeFileAt(
+      "settings.json",
+      JSON.stringify({ marketplaces: { old: { source: { source: "local", path: "/home/someone/mp" } } } }),
+      h.modulesHome
+    );
+
+    const result = await h.run(["marketplace", "list"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('{"source":{"source":"directory","path":"/home/someone/mp"}}');
+  });
+
   it("lists every marketplace registered in the global registry", async () => {
     await h.run(["marketplace", "add", "owner/repo", "--name", "mp"]);
     await h.run(["marketplace", "add", "other/repo", "--name", "mp2"]);
@@ -404,6 +450,7 @@ describe("marketplace add syncs the marketplace to Claude Code", () => {
       "mp",
       sourceJson,
       moduleName,
+      h.repoRoot,
       new MarketplaceRegistry(paths),
       new ModuleStore(paths),
       marketplaceCacheInstaller,

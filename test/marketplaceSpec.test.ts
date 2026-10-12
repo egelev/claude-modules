@@ -3,131 +3,221 @@ import {
   classifyMarketplaceSource,
   marketplacePortability,
   parseMarketplaceSpec,
+  upgradeLegacyMarketplaceSource,
 } from "../src/core/marketplaceSpec.js";
 
 describe("parseMarketplaceSpec", () => {
-  describe("bare GitHub shorthand", () => {
+  // Fixed so path resolution is deterministic; the shapes mirror Claude Code 2.1.295's own
+  // `claude plugin marketplace add` parser.
+  const options = { cwd: "/work/repo", home: "/home/me" };
+  const parse = (spec: string) => parseMarketplaceSpec(spec, options);
+
+  describe("GitHub shorthand", () => {
     it("recognizes owner/repo and infers the repo name", () => {
-      expect(parseMarketplaceSpec("owner/repo")).toEqual({
+      expect(parse("owner/repo")).toEqual({
         inferredName: "repo",
         source: { source: { source: "github", repo: "owner/repo" } },
       });
     });
-  });
 
-  describe("@ref-pinned GitHub shorthand", () => {
-    it("stores the whole spec, including @ref, verbatim in repo", () => {
-      expect(parseMarketplaceSpec("owner/repo@v2.0")).toEqual({
+    it("stores an @ref pin in its own ref field, not in repo", () => {
+      // Claude Code clones `github.com/<repo>.git` verbatim, so 'owner/repo@v2.0' in repo can't work.
+      expect(parse("owner/repo@v2.0")).toEqual({
         inferredName: "repo",
-        source: { source: { source: "github", repo: "owner/repo@v2.0" } },
+        source: { source: { source: "github", repo: "owner/repo", ref: "v2.0" } },
       });
     });
 
-    it("infers the name from the part before @, excluding the ref", () => {
-      // A naive `spec.split("/")[1]` (what bare shorthand uses) would give "repo@v2.0" here.
-      expect(parseMarketplaceSpec("owner/repo@v2.0").inferredName).toBe("repo");
+    it("accepts a #ref pin the same way, as Claude Code does", () => {
+      expect(parse("owner/repo#v2.0")).toEqual({
+        inferredName: "repo",
+        source: { source: { source: "github", repo: "owner/repo", ref: "v2.0" } },
+      });
     });
 
     it("supports a ref that itself contains a slash, like a branch name", () => {
-      expect(parseMarketplaceSpec("owner/repo@feature/foo")).toEqual({
+      expect(parse("owner/repo@feature/foo")).toEqual({
         inferredName: "repo",
-        source: { source: { source: "github", repo: "owner/repo@feature/foo" } },
+        source: { source: { source: "github", repo: "owner/repo", ref: "feature/foo" } },
       });
     });
 
-    it("treats a trailing bare @ with an empty ref as a valid degenerate pin", () => {
-      expect(parseMarketplaceSpec("owner/repo@")).toEqual({
-        inferredName: "repo",
-        source: { source: { source: "github", repo: "owner/repo@" } },
-      });
-    });
-
-    it("does not mistake a spec with no @ at all for an @ref pin", () => {
-      // Regression guard: a naive `spec.slice(0, spec.indexOf("@"))` without checking indexOf's -1
-      // result first would slice(0, -1) here, dropping the trailing "/" and spuriously matching
-      // GITHUB_SHORTHAND — silently turning this local path into a github source.
-      expect(parseMarketplaceSpec("owner/repo/")).toEqual({
-        inferredName: "repo",
-        source: { source: { source: "local", path: "owner/repo/" } },
-      });
+    it("rejects an empty trailing ref instead of storing it", () => {
+      expect(() => parse("owner/repo@")).toThrow("empty ref");
+      expect(() => parse("owner/repo#")).toThrow("empty ref");
     });
   });
 
-  describe("full git URL", () => {
-    it("recognizes an https git URL", () => {
-      expect(parseMarketplaceSpec("https://example.com/mp.git")).toEqual({
+  describe("http(s) URLs", () => {
+    it("recognizes a .git clone URL", () => {
+      expect(parse("https://example.com/mp.git")).toEqual({
         inferredName: "mp",
         source: { source: { source: "git", url: "https://example.com/mp.git" } },
       });
     });
 
-    it("recognizes a git URL pinned with a trailing #ref, stored verbatim in url", () => {
-      expect(parseMarketplaceSpec("https://example.com/mp.git#v1.2.3")).toEqual({
+    it("splits a trailing #ref off a clone URL into its own ref field", () => {
+      expect(parse("https://example.com/mp.git#v1.2.3")).toEqual({
         inferredName: "mp",
-        source: { source: { source: "git", url: "https://example.com/mp.git#v1.2.3" } },
+        source: { source: { source: "git", url: "https://example.com/mp.git", ref: "v1.2.3" } },
       });
     });
 
-    it("recognizes an ssh git@ URL", () => {
-      expect(parseMarketplaceSpec("git@github.com:owner/repo.git")).toEqual({
+    it("treats an Azure DevOps /_git/ URL as a clone URL", () => {
+      expect(parse("https://dev.azure.com/org/project/_git/mp")).toMatchObject({
+        source: { source: { source: "git", url: "https://dev.azure.com/org/project/_git/mp" } },
+      });
+    });
+
+    it("turns a github.com or gitlab.com repo page into a .git clone URL", () => {
+      expect(parse("https://github.com/owner/repo")).toEqual({
+        inferredName: "repo",
+        source: { source: { source: "git", url: "https://github.com/owner/repo.git" } },
+      });
+      expect(parse("https://github.com/owner/repo/#main")).toEqual({
+        inferredName: "repo",
+        source: { source: { source: "git", url: "https://github.com/owner/repo.git", ref: "main" } },
+      });
+      expect(parse("https://gitlab.com/group/sub/project")).toMatchObject({
+        source: { source: { source: "git", url: "https://gitlab.com/group/sub/project.git" } },
+      });
+    });
+
+    it("keeps userinfo in a github.com repo URL rather than mistaking it for an @ref pin", () => {
+      expect(parse("https://user@github.com/owner/repo")).toEqual({
+        inferredName: "repo",
+        source: { source: { source: "git", url: "https://user@github.com/owner/repo.git" } },
+      });
+    });
+
+    it("treats any other URL as a hosted marketplace.json, inferring the name from its directory", () => {
+      expect(parse("https://example.com/plugins/marketplace.json")).toEqual({
+        inferredName: "plugins",
+        source: { source: { source: "url", url: "https://example.com/plugins/marketplace.json" } },
+      });
+      expect(parse("https://github.com/owner/repo/raw/main/marketplace.json")).toMatchObject({
+        source: { source: { source: "url" } },
+      });
+    });
+  });
+
+  describe("ssh git URLs", () => {
+    it("recognizes a user@host:path URL", () => {
+      expect(parse("git@github.com:owner/repo.git")).toEqual({
         inferredName: "repo",
         source: { source: { source: "git", url: "git@github.com:owner/repo.git" } },
       });
     });
 
-    it("does not mistake a URL with embedded userinfo for @ref-pinned shorthand", () => {
-      // "https://user@github.com/..." contains an "@", but everything before it ("https://user")
-      // fails GITHUB_SHORTHAND — the "://" breaks the required single-slash-flanked-by-word-chars
-      // shape — so this must still fall through to the git-URL branch below.
-      expect(parseMarketplaceSpec("https://user@github.com/owner/repo")).toEqual({
-        inferredName: "repo",
-        source: { source: { source: "git", url: "https://user@github.com/owner/repo" } },
+    it("splits a trailing #ref into its own ref field", () => {
+      expect(parse("git@gitlab.example.com:team/mp.git#main")).toEqual({
+        inferredName: "mp",
+        source: { source: { source: "git", url: "git@gitlab.example.com:team/mp.git", ref: "main" } },
       });
     });
   });
 
-  describe("shorthand with a rejected #ref fragment", () => {
-    it("throws, recommending '@ref' pinning and the equivalent full git URL", () => {
-      expect(() => parseMarketplaceSpec("owner/repo#v2.0")).toThrow("@ref");
-      expect(() => parseMarketplaceSpec("owner/repo#v2.0")).toThrow("owner/repo@v2.0");
-      expect(() => parseMarketplaceSpec("owner/repo#v2.0")).toThrow(
-        "https://github.com/owner/repo.git#v2.0"
-      );
-    });
-  });
-
-  describe("local path fallback", () => {
-    it("falls back to a local path for anything that isn't shorthand, a URL, or an ssh URL", () => {
-      expect(parseMarketplaceSpec("./relative/path")).toEqual({
+  describe("paths", () => {
+    it("stores a relative ./ path as an absolute directory source", () => {
+      expect(parse("./relative/path")).toEqual({
         inferredName: "path",
-        source: { source: { source: "local", path: "./relative/path" } },
+        source: { source: { source: "directory", path: "/work/repo/relative/path" } },
       });
     });
 
-    it("infers the name from the parent directory when the path points at marketplace.json", () => {
-      expect(parseMarketplaceSpec("/some/dir/marketplace.json")).toEqual({
+    it("checks explicit paths before shorthand, so ./plugins isn't read as a GitHub repo", () => {
+      // '.' is a valid owner character, so './plugins' also matches the owner/repo shape.
+      expect(parse("./plugins")).toEqual({
+        inferredName: "plugins",
+        source: { source: { source: "directory", path: "/work/repo/plugins" } },
+      });
+      expect(parse("../plugins")).toMatchObject({
+        source: { source: { source: "directory", path: "/work/plugins" } },
+      });
+    });
+
+    it("expands a leading ~ to the home directory", () => {
+      expect(parse("~/marketplaces/mine")).toEqual({
+        inferredName: "mine",
+        source: { source: { source: "directory", path: "/home/me/marketplaces/mine" } },
+      });
+    });
+
+    it("stores a .json path as a file source, inferring the name from its directory", () => {
+      expect(parse("/some/dir/marketplace.json")).toEqual({
         inferredName: "dir",
-        source: { source: { source: "local", path: "/some/dir/marketplace.json" } },
+        source: { source: { source: "file", path: "/some/dir/marketplace.json" } },
       });
     });
 
-    it("falls back to local for a spec containing '@' that isn't GitHub-shorthand-shaped before it", () => {
-      expect(parseMarketplaceSpec("owner@weird")).toEqual({
-        inferredName: "owner@weird",
-        source: { source: { source: "local", path: "owner@weird" } },
-      });
-    });
-
-    it("falls back to local, keeping the #fragment in path, for a #-bearing spec that isn't shorthand-shaped before the #", () => {
-      // Exercises the throw condition's other half: spec !== withoutFragment (true) but
-      // GITHUB_SHORTHAND.test(withoutFragment) (false) — must fall through, not throw — and, like
-      // the git branch's `url`, keeps the #fragment verbatim in `path` even though the *name* is
-      // inferred from the part before it.
-      expect(parseMarketplaceSpec("./some/path#fragment")).toEqual({
+    it("keeps a #fragment as part of a path, as Claude Code does, but not of the inferred name", () => {
+      expect(parse("./some/path#fragment")).toEqual({
         inferredName: "path",
-        source: { source: { source: "local", path: "./some/path#fragment" } },
+        source: { source: { source: "directory", path: "/work/repo/some/path#fragment" } },
       });
     });
+
+    it("still treats anything else as a path relative to cwd, now in a shape Claude Code accepts", () => {
+      expect(parse("owner@weird")).toEqual({
+        inferredName: "owner@weird",
+        source: { source: { source: "directory", path: "/work/repo/owner@weird" } },
+      });
+      expect(parse("owner/repo/")).toEqual({
+        inferredName: "repo",
+        source: { source: { source: "directory", path: "/work/repo/owner/repo" } },
+      });
+    });
+  });
+});
+
+describe("upgradeLegacyMarketplaceSource", () => {
+  it("turns a legacy local directory into a directory source, keeping its path as stored", () => {
+    expect(upgradeLegacyMarketplaceSource({ source: { source: "local", path: "./plugins" } })).toEqual({
+      source: { source: "directory", path: "./plugins" },
+    });
+  });
+
+  it("turns a legacy local .json path into a file source", () => {
+    expect(upgradeLegacyMarketplaceSource({ source: { source: "local", path: "/mp/marketplace.json" } })).toEqual({
+      source: { source: "file", path: "/mp/marketplace.json" },
+    });
+  });
+
+  it("moves an @ref out of a github repo, and a #ref out of a git url, into ref", () => {
+    expect(upgradeLegacyMarketplaceSource({ source: { source: "github", repo: "owner/repo@v2.0" } })).toEqual({
+      source: { source: "github", repo: "owner/repo", ref: "v2.0" },
+    });
+    expect(upgradeLegacyMarketplaceSource({ source: { source: "git", url: "https://x.example/mp.git#main" } })).toEqual(
+      { source: { source: "git", url: "https://x.example/mp.git", ref: "main" } }
+    );
+  });
+
+  it("preserves every other field, inside and outside source", () => {
+    expect(
+      upgradeLegacyMarketplaceSource({
+        source: { source: "github", repo: "owner/repo@v2", sparsePaths: ["plugins"] },
+        autoUpdate: true,
+      })
+    ).toEqual({ source: { source: "github", repo: "owner/repo", ref: "v2", sparsePaths: ["plugins"] }, autoUpdate: true });
+  });
+
+  it("returns current and unrecognized shapes unchanged — the same reference", () => {
+    const current = [
+      { source: { source: "github", repo: "owner/repo", ref: "v2" } },
+      { source: { source: "git", url: "https://x.example/mp.git" } },
+      { source: { source: "directory", path: "/mp" } },
+      { source: { source: "settings", name: "mp", plugins: [] } },
+      { nope: true },
+    ];
+    for (const source of current) {
+      expect(upgradeLegacyMarketplaceSource(source)).toBe(source);
+    }
+    expect(upgradeLegacyMarketplaceSource(undefined)).toBeUndefined();
+  });
+
+  it("is idempotent", () => {
+    const once = upgradeLegacyMarketplaceSource({ source: { source: "local", path: "/mp" } });
+    expect(upgradeLegacyMarketplaceSource(once)).toBe(once);
   });
 });
 

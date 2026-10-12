@@ -58,6 +58,23 @@ describe("enable", () => {
     expect(settings.extraKnownMarketplaces).toEqual({ mp: githubSource("owner/repo") });
   });
 
+  it("writes a legacy module source into settings.json in the shape Claude Code accepts, replacing an old copy", async () => {
+    // Both the module and the scope hold `{source:"local"}`, as an older version of this tool wrote
+    // them — a source type Claude Code has no schema for.
+    const legacy = { source: { source: "local", path: "/home/someone/mp" } };
+    await h.writeModule("legacy", { enabledPlugins: { "a@old-mp": true }, extraKnownMarketplaces: { "old-mp": legacy } });
+    await h.writeSettings("local", { extraKnownMarketplaces: { "old-mp": legacy } });
+
+    const result = await h.run(["enable", "legacy"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("different source");
+    const settings = await h.readSettings("local");
+    expect(settings.extraKnownMarketplaces).toEqual({
+      "old-mp": { source: { source: "directory", path: "/home/someone/mp" } },
+    });
+  });
+
   it("fails when two modules declare the same marketplace differently", async () => {
     const result = await h.run(["enable", "backend", "conflicting"]);
 

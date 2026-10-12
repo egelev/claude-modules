@@ -5,7 +5,7 @@ import { CompositionResolver } from "../../core/CompositionResolver.js";
 import { ModuleStore } from "../../core/ModuleStore.js";
 import { ScopeResolver } from "../../core/ScopeResolver.js";
 import { SettingsRepository } from "../../core/SettingsRepository.js";
-import { emptyModule, Module, Scope } from "../../core/types.js";
+import { emptyModule, Module, Scope, upgradeMarketplaceSources } from "../../core/types.js";
 import { warnIfNonPortableMarketplace } from "../../core/marketplacePortability.js";
 import { Logger } from "../../util/Logger.js";
 import { ModuleExistsError } from "../../util/errors.js";
@@ -90,7 +90,8 @@ export class CreateModuleCommand implements Command {
         .map(([pluginKey]) => [pluginKey, true])
     );
 
-    const extraKnownMarketplaces = { ...(settings.extraKnownMarketplaces ?? {}) };
+    // An older version of this tool may have written a since-fixed shape into this file.
+    const extraKnownMarketplaces = upgradeMarketplaceSources(settings.extraKnownMarketplaces ?? {});
     // Same warning `plugin install` gives: this path is the likeliest to pick up a local-path marketplace,
     // since it copies whatever '/plugin marketplace add ./somewhere' left in settings.json.
     for (const [marketplace, source] of Object.entries(extraKnownMarketplaces)) {

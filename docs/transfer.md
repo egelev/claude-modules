@@ -148,7 +148,7 @@ they see one.
 | ----------------------------------------------------------- | ----------------------------------------- |
 | `github`                                                    | `directory`, `file`                       |
 | `git` with a remote URL (`https://`, `ssh://`, `git@host:`) | `git` with a `file://` URL or a path      |
-| `url` with an `http(s)` URL                                 | a local path added with `marketplace add` |
+| `url` with an `http(s)` URL                                 | `local`, stored by older versions         |
 | `settings` (an inline catalog)                              |                                           |
 
 A source shape this tool doesn't recognize gets the same warning, rather than being assumed safe.
