@@ -3,7 +3,8 @@ import { dryRunTag } from "../util/outputStyle.js";
 import { KnownMarketplacesCache } from "./KnownMarketplacesCache.js";
 import { InstalledPluginsCache } from "./InstalledPluginsCache.js";
 import { parsePluginKey } from "./pluginKey.js";
-import { Scope } from "./types.js";
+import { marketplaceAddPlan } from "./marketplaceSpec.js";
+import { MarketplaceSource, Scope } from "./types.js";
 import { Logger } from "../util/Logger.js";
 import { ClaudeRunner, defaultClaudeRunner } from "./ClaudeRunner.js";
 
@@ -29,8 +30,15 @@ export class PluginCacheInstaller {
    * `claude plugin install` durably enables the plugin at whatever scope this runs with, not just
    * caches it. Returns the subset of `pluginKeys` this call actually installed (ok:true), so a caller
    * with no real scope of its own (see `neutralizeUserScopeEnablement`) knows which ones need undoing.
+   * `marketplaces` is the caller's declared sources, consulted only to explain an unregistered
+   * marketplace accurately — one that only settings.json can express isn't something to add by hand.
    */
-  async ensureCached(pluginKeys: Iterable<string>, dryRun: boolean, scope: Scope = Scope.User): Promise<string[]> {
+  async ensureCached(
+    pluginKeys: Iterable<string>,
+    dryRun: boolean,
+    scope: Scope = Scope.User,
+    marketplaces: Readonly<Record<string, MarketplaceSource>> = {}
+  ): Promise<string[]> {
     const installed = await this.installedPluginsCache.keys();
     const freshlyInstalled: string[] = [];
     for (const pluginKey of pluginKeys) {
@@ -45,7 +53,7 @@ export class PluginCacheInstaller {
         );
         continue;
       }
-      if (await this.installOne(pluginKey, scope)) freshlyInstalled.push(pluginKey);
+      if (await this.installOne(pluginKey, scope, marketplaces)) freshlyInstalled.push(pluginKey);
     }
     return freshlyInstalled;
   }
@@ -71,9 +79,22 @@ export class PluginCacheInstaller {
     }
   }
 
-  private async installOne(pluginKey: string, scope: Scope): Promise<boolean> {
+  private async installOne(
+    pluginKey: string,
+    scope: Scope,
+    marketplaces: Readonly<Record<string, MarketplaceSource>>
+  ): Promise<boolean> {
     const { marketplace } = parsePluginKey(pluginKey);
     const known = await this.knownMarketplacesCache.get(marketplace);
+    const declared = Object.hasOwn(marketplaces, marketplace) ? marketplaces[marketplace] : undefined;
+    if (known === undefined && declared !== undefined && marketplaceAddPlan(declared).kind === "from-settings") {
+      this.logger.info(
+        `'${pc.bold(pluginKey)}' can't be cached yet: Claude Code registers marketplace '${pc.bold(marketplace)}' ` +
+          `from settings.json at the next session start.\n  After that, run 'claude-modules reload --install' ` +
+          `in a scope using this module.`
+      );
+      return false;
+    }
     if (known === undefined) {
       this.logger.warn(
         `'${pc.bold(pluginKey)}' isn't cached by Claude Code, and marketplace '${pc.bold(marketplace)}' isn't in ` +

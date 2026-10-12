@@ -9,6 +9,7 @@ import { PluginCacheInstaller } from "../src/core/PluginCacheInstaller.js";
 import { Scope } from "../src/core/types.js";
 import { Paths } from "../src/util/Paths.js";
 import { Logger, LogLevel } from "../src/util/Logger.js";
+import { RecordingLogger, githubSource, settingsSource } from "./helpers/harness.js";
 
 let claudeHome: string;
 let paths: Paths;
@@ -143,6 +144,45 @@ describe("PluginCacheInstaller", () => {
     await build(runs).ensureCached(["a@mp"], false);
 
     expect(runs).toEqual([]);
+  });
+
+  it("explains, as info, that a marketplace only settings.json can express registers at session start", async () => {
+    await writeInstalledPlugins({ version: 2, plugins: {} });
+    const runs: string[][] = [];
+    const logger = new RecordingLogger();
+    const installer = new PluginCacheInstaller(
+      new KnownMarketplacesCache(paths),
+      new InstalledPluginsCache(paths),
+      logger,
+      {},
+      async (args) => {
+        runs.push(args);
+        return { ok: true, stdout: "" };
+      }
+    );
+
+    await installer.ensureCached(["a@mp"], false, Scope.User, { mp: settingsSource("mp") });
+
+    expect(runs).toEqual([]);
+    expect(logger.warnings).toEqual([]);
+    expect(logger.infos.join("\n")).toContain("next session start");
+    expect(logger.infos.join("\n")).not.toContain("claude plugin marketplace add");
+  });
+
+  it("still warns to add an unknown marketplace the CLI can express", async () => {
+    await writeInstalledPlugins({ version: 2, plugins: {} });
+    const logger = new RecordingLogger();
+    const installer = new PluginCacheInstaller(
+      new KnownMarketplacesCache(paths),
+      new InstalledPluginsCache(paths),
+      logger,
+      {},
+      async () => ({ ok: true, stdout: "" })
+    );
+
+    await installer.ensureCached(["a@mp"], false, Scope.User, { mp: githubSource("owner/repo") });
+
+    expect(logger.warnings.join("\n")).toContain("Run 'claude plugin marketplace add'");
   });
 
   it("treats an install failure as a warning, not a thrown error", async () => {

@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import * as tar from "tar";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Harness, githubSource } from "./helpers/harness.js";
+import { Harness, githubSource, settingsSource } from "./helpers/harness.js";
 
 describe("export", () => {
   let h: Harness;
@@ -128,6 +128,35 @@ describe("export", () => {
     const result = await h.run(["export", "backend"], h.root);
 
     expect(result.stderr).not.toContain("machine-specific");
+  });
+
+  it("does not warn for a settings or remote git marketplace — both travel with the module", async () => {
+    await h.writeModule("backend", {
+      enabledPlugins: { "a@inline-mp": true, "b@git-mp": true },
+      extraKnownMarketplaces: {
+        "inline-mp": settingsSource("inline-mp"),
+        "git-mp": { source: { source: "git", url: "https://gitlab.example.com/team/plugins.git" } },
+      },
+      composedModules: [],
+    });
+
+    const result = await h.run(["export", "backend"], h.root);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("machine-specific");
+  });
+
+  it("names the real source type when warning about a Claude Code directory marketplace", async () => {
+    await h.writeModule("backend", {
+      enabledPlugins: { "a@dir-mp": true },
+      extraKnownMarketplaces: { "dir-mp": { source: { source: "directory", path: "/home/someone/mp" } } },
+      composedModules: [],
+    });
+
+    const result = await h.run(["export", "backend"], h.root);
+
+    expect(result.stderr).toContain("machine-specific");
+    expect(result.stderr).toContain("a 'directory' source");
   });
 
   it("warns for an unrecognized marketplace source shape too, rather than assuming it's portable", async () => {

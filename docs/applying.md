@@ -122,6 +122,9 @@ across scopes.
 > [!WARNING]
 > If a marketplace or plugin is still missing after the attempt, `enable` **exits with code 2** —
 > unless `--dry-run` was also given, in which case nothing was attempted and the exit code stays 0.
+> A marketplace Claude Code registers from `settings.json` (an inline `settings` source, say) and
+> the plugins from it don't count: only the next session start can register it, so they're reported
+> as pending, and `reload --install` caches the plugins after that.
 
 ### `--save`
 
@@ -266,7 +269,9 @@ shared across repos), pass `--scope user` explicitly.
 Best-effort per item, like [`enable --install`](#--install): one marketplace or plugin failing to
 update (network error, nothing installed at that scope, ...) is logged as a warning and doesn't stop
 the rest of the run. If anything failed and this wasn't a `--dry-run`, `update` **exits with code
-2** afterward — same contract as `enable --install` and `status`.
+2** afterward — same contract as `enable --install` and `status`. A marketplace Claude Code hasn't
+registered yet, and only can from `settings.json`, is skipped with its plugins instead of failing:
+there's nothing to update until the next session start registers it.
 
 An already-open Claude Code session doesn't pick up an updated plugin's new code on its own —
 `claude plugin update` itself notes "restart required to apply" — so restart the session (or start a

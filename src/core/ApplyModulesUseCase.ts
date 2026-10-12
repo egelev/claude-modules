@@ -5,7 +5,8 @@ import { ModuleResolver } from "./ModuleResolver.js";
 import { SettingsRepository } from "./SettingsRepository.js";
 import { SettingsApplier } from "./SettingsApplier.js";
 import { MarketplaceCacheInstaller } from "./MarketplaceCacheInstaller.js";
-import { marketplaceSpecFromSource } from "./marketplaceSpec.js";
+import { marketplaceAddPlan } from "./marketplaceSpec.js";
+import { marketplaceOfPluginKey } from "./pluginKey.js";
 import { PluginCacheInstaller } from "./PluginCacheInstaller.js";
 import { EnabledPluginsReport, EnabledPluginsReporter } from "./EnabledPluginsReporter.js";
 import { ClaudeSettings, lessSpecificScopes, MarketplaceSource, Scope } from "./types.js";
@@ -33,6 +34,13 @@ export interface ApplyModulesResult {
    * such a marketplace must never fail an --install run, since there's nothing actionable to retry.
    */
   uncachedMarketplaceNames: string[];
+  /**
+   * Subset of marketplaceNames still unknown to Claude Code whose source only settings.json can
+   * express (see `marketplaceAddPlan`) — Claude Code registers these itself at the next session
+   * start, so neither they nor plugins from them can be cached by this run, and an --install run
+   * must not fail over them.
+   */
+  pendingSettingsMarketplaceNames: string[];
 }
 
 interface ScopeOverride {
@@ -90,7 +98,12 @@ export class ApplyModulesUseCase {
       // "is this marketplace known" check moments later in the same process — giving a plugin from a
       // newly-added marketplace a chance to install in this same run.
       await this.marketplaceCacheInstaller.ensureCached(union.extraKnownMarketplaces, dryRun, resolvedScope.scope);
-      await this.pluginCacheInstaller.ensureCached(union.enabledPluginNames, dryRun, resolvedScope.scope);
+      await this.pluginCacheInstaller.ensureCached(
+        union.enabledPluginNames,
+        dryRun,
+        resolvedScope.scope,
+        union.extraKnownMarketplaces
+      );
     }
 
     this.logger.section();
@@ -107,8 +120,8 @@ export class ApplyModulesUseCase {
 
     const report = await this.reporter.report(scope, resolvedScope.settingsPath, updated, cwd, dryRun);
 
-    const convertibleMissingMarketplaceNames = await this.reportMissingMarketplaces(union, install, dryRun);
-    this.reportUncachedPlugins(report, install, dryRun);
+    const missingMarketplaces = await this.reportMissingMarketplaces(union, install, dryRun);
+    this.reportUncachedPlugins(report, install, dryRun, missingMarketplaces.pendingSettings);
 
     if (!dryRun) logSessionReloadHint(this.logger);
 
@@ -117,7 +130,8 @@ export class ApplyModulesUseCase {
       report,
       enabledPluginNames: union.enabledPluginNames,
       marketplaceNames: new Set(Object.keys(union.extraKnownMarketplaces)),
-      uncachedMarketplaceNames: convertibleMissingMarketplaceNames.sort(),
+      uncachedMarketplaceNames: missingMarketplaces.convertible.sort(),
+      pendingSettingsMarketplaceNames: missingMarketplaces.pendingSettings.sort(),
     };
   }
 
@@ -206,43 +220,70 @@ export class ApplyModulesUseCase {
     union: { extraKnownMarketplaces: Record<string, MarketplaceSource> },
     install: boolean,
     dryRun: boolean
-  ): Promise<string[]> {
+  ): Promise<{ convertible: string[]; pendingSettings: string[] }> {
     const missingMarketplaceNames = await this.marketplaceCacheInstaller.missing(union.extraKnownMarketplaces);
-    const convertibleMissingMarketplaceNames: string[] = [];
+    const convertible: string[] = [];
+    const pendingSettings: string[] = [];
     if (missingMarketplaceNames.length > 0) {
       this.logger.section();
       const lines = missingMarketplaceNames.map((name) => {
-        const spec = marketplaceSpecFromSource(union.extraKnownMarketplaces[name]!);
-        if (spec !== undefined) convertibleMissingMarketplaceNames.push(name);
-        return spec !== undefined
-          ? `  ${commandHint(`claude plugin marketplace add ${spec} --scope user`)}`
-          : `  # '${name}': source isn't a shape this tool can convert to a CLI spec — add it manually`;
+        const plan = marketplaceAddPlan(union.extraKnownMarketplaces[name]!);
+        switch (plan.kind) {
+          case "cli":
+            convertible.push(name);
+            return `  ${commandHint(`claude plugin marketplace add ${plan.args.join(" ")} --scope user`)}`;
+          case "from-settings":
+            pendingSettings.push(name);
+            return (
+              `  # '${name}': Claude Code registers it from settings.json at the next session start — ` +
+              "then run 'claude-modules reload --install' for its plugins"
+            );
+          case "unknown":
+            return `  # '${name}': source isn't a shape this tool can convert to a CLI spec — add it manually`;
+        }
       });
-      const hint = !install
-        ? "Run with --install to attempt these automatically, or add manually with the command(s) above."
-        : dryRun
-          ? `${dryRunTag()} An add attempt would run now for the marketplace(s) above; nothing was actually run.`
-          : "Automatic add did not register the marketplace(s) above — see the warnings above for why, or add manually with the command(s) shown.";
+      // Only registration from settings is pending: there's nothing to run, so "use --install" or
+      // "add manually" would both be misleading.
+      const onlyPendingSettings = pendingSettings.length === missingMarketplaceNames.length;
+      const hint = onlyPendingSettings
+        ? "Start a Claude Code session to let it register the marketplace(s) above."
+        : !install
+          ? "Run with --install to attempt these automatically, or add manually with the command(s) above."
+          : dryRun
+            ? `${dryRunTag()} An add attempt would run now for the marketplace(s) above; nothing was actually run.`
+            : "Automatic add did not register the marketplace(s) above — see the warnings above for why, or add manually with the command(s) shown.";
       this.logger.info(`Marketplace(s) not known to Claude Code:\n${lines.join("\n")}\n\n${hint}`);
     }
-    return convertibleMissingMarketplaceNames;
+    return { convertible, pendingSettings };
   }
 
   // Header stays neutral regardless of `install`: uncachedPluginKeys covers the whole scope
   // chain, not just this run's union, so claiming "these were just attempted" would be false for
   // any entry that came from unrelated drift elsewhere in the chain. This path is shared by
   // `enable` and `reload`, both of which now have their own --install flag to point the user at.
-  private reportUncachedPlugins(report: EnabledPluginsReport, install: boolean, dryRun: boolean): void {
+  private reportUncachedPlugins(
+    report: EnabledPluginsReport,
+    install: boolean,
+    dryRun: boolean,
+    pendingSettingsMarketplaceNames: readonly string[]
+  ): void {
     if (report.uncachedPluginKeys.length > 0) {
       this.logger.section();
       const commands = report.uncachedPluginKeys
         .map((key) => `  ${commandHint(`claude plugin install ${key} --scope user -y`)}`)
         .join("\n");
-      const hint = !install
-        ? "Run with --install to attempt these automatically, or install manually with the command(s) above."
-        : dryRun
-          ? `${dryRunTag()} An install attempt would run now for the plugin(s) above; nothing was actually run.`
-          : "Automatic install did not cache the plugin(s) above — see the warnings above for why, or install manually with the command(s) shown.";
+      // Every one of them waits on a marketplace only a session start can register: neither
+      // --install nor the commands above can succeed before that, so don't suggest they failed.
+      const pending = new Set(pendingSettingsMarketplaceNames);
+      const allPending = report.uncachedPluginKeys.every((key) => pending.has(marketplaceOfPluginKey(key) ?? ""));
+      const hint = allPending
+        ? "These can be cached once Claude Code registers their marketplace at the next session start — " +
+          "then run 'claude-modules reload --install', or the command(s) above."
+        : !install
+          ? "Run with --install to attempt these automatically, or install manually with the command(s) above."
+          : dryRun
+            ? `${dryRunTag()} An install attempt would run now for the plugin(s) above; nothing was actually run.`
+            : "Automatic install did not cache the plugin(s) above — see the warnings above for why, or install manually with the command(s) shown.";
       this.logger.info(`Plugin(s) not cached by Claude Code:\n${commands}\n\n${hint}`);
     }
   }

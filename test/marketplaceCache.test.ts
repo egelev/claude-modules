@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { KnownMarketplacesCache } from "../src/core/KnownMarketplacesCache.js";
 import { MarketplaceCacheInstaller } from "../src/core/MarketplaceCacheInstaller.js";
-import { marketplaceSpecFromSource } from "../src/core/marketplaceSpec.js";
+import { marketplaceAddPlan } from "../src/core/marketplaceSpec.js";
 import { ClaudeRunResult } from "../src/core/ClaudeRunner.js";
 import { Paths } from "../src/util/Paths.js";
 import { Logger, LogLevel } from "../src/util/Logger.js";
+import { RecordingLogger } from "./helpers/harness.js";
 
 let claudeHome: string;
 let paths: Paths;
@@ -26,31 +27,92 @@ async function writeKnownMarketplaces(entries: unknown): Promise<void> {
   await writeFile(join(claudeHome, "plugins", "known_marketplaces.json"), JSON.stringify(entries), "utf8");
 }
 
-describe("marketplaceSpecFromSource", () => {
+describe("marketplaceAddPlan", () => {
+  const cli = (...args: string[]) => ({ kind: "cli", args });
+
   it("recovers a github spec", () => {
-    expect(marketplaceSpecFromSource({ source: { source: "github", repo: "owner/repo" } })).toBe("owner/repo");
+    expect(marketplaceAddPlan({ source: { source: "github", repo: "owner/repo" } })).toEqual(cli("owner/repo"));
   });
 
   it("recovers a github spec with an @ref pin, verbatim", () => {
-    expect(marketplaceSpecFromSource({ source: { source: "github", repo: "owner/repo@v2.0" } })).toBe(
-      "owner/repo@v2.0"
+    expect(marketplaceAddPlan({ source: { source: "github", repo: "owner/repo@v2.0" } })).toEqual(
+      cli("owner/repo@v2.0")
     );
   });
 
-  it("recovers a git spec", () => {
-    expect(marketplaceSpecFromSource({ source: { source: "git", url: "https://example.com/mp.git" } })).toBe(
-      "https://example.com/mp.git"
+  it("appends a separate github ref field as @ref, unless repo is already pinned", () => {
+    // Claude Code itself stores an 'owner/repo@ref' add as { repo, ref } — dropping ref would register
+    // the default branch instead.
+    expect(marketplaceAddPlan({ source: { source: "github", repo: "owner/repo", ref: "v2" } })).toEqual(
+      cli("owner/repo@v2")
+    );
+    expect(marketplaceAddPlan({ source: { source: "github", repo: "owner/repo@v1", ref: "v2" } })).toEqual(
+      cli("owner/repo@v1")
     );
   });
 
-  it("recovers a local spec", () => {
-    expect(marketplaceSpecFromSource({ source: { source: "local", path: "/some/path" } })).toBe("/some/path");
+  it("carries sparsePaths over as --sparse", () => {
+    expect(
+      marketplaceAddPlan({ source: { source: "github", repo: "owner/repo", sparsePaths: [".claude-plugin", "plugins"] } })
+    ).toEqual(cli("owner/repo", "--sparse", ".claude-plugin", "plugins"));
   });
 
-  it("returns undefined for an unrecognized source shape", () => {
-    expect(marketplaceSpecFromSource({ source: { source: "unknown-kind" } })).toBeUndefined();
-    expect(marketplaceSpecFromSource({})).toBeUndefined();
-    expect(marketplaceSpecFromSource(undefined)).toBeUndefined();
+  it("recovers a git spec, appending a separate ref as #ref", () => {
+    expect(marketplaceAddPlan({ source: { source: "git", url: "https://example.com/mp.git" } })).toEqual(
+      cli("https://example.com/mp.git")
+    );
+    expect(marketplaceAddPlan({ source: { source: "git", url: "https://example.com/mp.git", ref: "main" } })).toEqual(
+      cli("https://example.com/mp.git#main")
+    );
+  });
+
+  it("defers a github or git source with a custom path to settings.json — the CLI can't express it", () => {
+    expect(
+      marketplaceAddPlan({
+        source: { source: "github", repo: "owner/repo", path: "sub/dir/.claude-plugin/marketplace.json" },
+      })
+    ).toEqual({ kind: "from-settings", description: "a 'github' source with a custom 'path'" });
+    expect(
+      marketplaceAddPlan({ source: { source: "git", url: "https://example.com/mp.git", path: "x/marketplace.json" } })
+    ).toMatchObject({ kind: "from-settings" });
+  });
+
+  it("treats a path equal to the default manifest location as no path at all", () => {
+    expect(
+      marketplaceAddPlan({ source: { source: "github", repo: "owner/repo", path: ".claude-plugin/marketplace.json" } })
+    ).toEqual(cli("owner/repo"));
+  });
+
+  it("defers an inline settings source to settings.json", () => {
+    expect(
+      marketplaceAddPlan({ source: { source: "settings", name: "mp", plugins: [] } })
+    ).toEqual({ kind: "from-settings", description: "an inline 'settings' source" });
+  });
+
+  it("recovers a url source, unless it needs request headers", () => {
+    expect(marketplaceAddPlan({ source: { source: "url", url: "https://example.com/marketplace.json" } })).toEqual(
+      cli("https://example.com/marketplace.json")
+    );
+    expect(
+      marketplaceAddPlan({
+        source: { source: "url", url: "https://example.com/marketplace.json", headers: { Authorization: "x" } },
+      })
+    ).toMatchObject({ kind: "from-settings" });
+  });
+
+  it("recovers local, directory, and file specs from their path", () => {
+    expect(marketplaceAddPlan({ source: { source: "local", path: "/some/path" } })).toEqual(cli("/some/path"));
+    expect(marketplaceAddPlan({ source: { source: "directory", path: "/some/dir" } })).toEqual(cli("/some/dir"));
+    expect(marketplaceAddPlan({ source: { source: "file", path: "/some/marketplace.json" } })).toEqual(
+      cli("/some/marketplace.json")
+    );
+  });
+
+  it("returns unknown for an unrecognized or incomplete source shape", () => {
+    expect(marketplaceAddPlan({ source: { source: "unknown-kind" } })).toEqual({ kind: "unknown" });
+    expect(marketplaceAddPlan({ source: { source: "github" } })).toEqual({ kind: "unknown" });
+    expect(marketplaceAddPlan({})).toEqual({ kind: "unknown" });
+    expect(marketplaceAddPlan(undefined)).toEqual({ kind: "unknown" });
   });
 });
 
@@ -85,6 +147,32 @@ describe("MarketplaceCacheInstaller", () => {
     await build(runs).ensureCached({ mp: { source: { source: "github", repo: "owner/repo" } } }, false);
 
     expect(runs).toEqual([["plugin", "marketplace", "add", "owner/repo", "--scope", "user"]]);
+  });
+
+  it("passes --sparse through to the add command", async () => {
+    const runs: string[][] = [];
+
+    await build(runs).ensureCached(
+      { mp: { source: { source: "github", repo: "owner/repo", sparsePaths: ["plugins"] } } },
+      false
+    );
+
+    expect(runs).toEqual([["plugin", "marketplace", "add", "owner/repo", "--sparse", "plugins", "--scope", "user"]]);
+  });
+
+  it("logs info, never a warning, and doesn't shell out for a source only settings.json can express", async () => {
+    const runs: string[][] = [];
+    const logger = new RecordingLogger();
+    const installer = new MarketplaceCacheInstaller(new KnownMarketplacesCache(paths), logger, {}, async (args) => {
+      runs.push(args);
+      return { ok: true, stdout: "" };
+    });
+
+    await installer.ensureCached({ mp: { source: { source: "settings", name: "mp", plugins: [] } } }, false);
+
+    expect(runs).toEqual([]);
+    expect(logger.warnings).toEqual([]);
+    expect(logger.infos.join("\n")).toContain("next session start");
   });
 
   it("warns without shelling out when the source isn't spec-convertible", async () => {

@@ -34,8 +34,9 @@ If the plugin's marketplace isn't already known to the module, its source is res
    marketplace via `/plugin` inside Claude Code, this picks it up automatically
 4. otherwise the command fails, naming the remedies above
 
-Whichever wins, the source is **copied onto the module as a snapshot**, not referenced. A
-non-`github` source is warned about, since it won't mean anything on another machine.
+Whichever wins, the source is **copied onto the module as a snapshot**, not referenced. A source
+that names a path on this machine is warned about, since it won't mean anything on another one —
+see [Non-portable marketplace sources](transfer.md#non-portable-marketplace-sources).
 
 ```bash
 claude-modules plugin install backend foo@custom-mp \
@@ -54,7 +55,9 @@ known to Claude Code.
 
 This never happens silently. A plugin that was missing and got installed is logged explicitly, and
 any failure (no `claude` on `PATH`, no network, unknown marketplace) is a **warning, not a hard
-error** — the module is saved either way.
+error** — the module is saved either way. One unknown marketplace isn't a failure: one Claude Code
+registers itself from `settings.json` at the next session start (an inline `settings` source, say)
+is logged as info, since its plugins can only be cached after that.
 
 > `-y` accepts a marketplace-declared "run a command to install" plugin's command without showing it
 > to you first. Fine for the official marketplace; worth knowing for third-party ones.

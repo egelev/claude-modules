@@ -46,6 +46,13 @@ add <spec> --scope user` on your behalf — the same best-effort cache-warming
 is logged explicitly; a failure (no `claude` on `PATH`, no network) is a **warning, not a hard
 error** — the registry write above still succeeds either way.
 
+Some sources have no `claude plugin marketplace add` form at all: an inline `settings` source, a
+`github` or `git` source with a custom `path`, and a `url` source with request headers. Claude Code
+registers these itself from `settings.json` at the next session start, so nothing is run for them —
+an info line says so, and [`enable`](applying.md#enable) writes the entry where Claude Code will
+find it. See the README's
+[practical use cases](../README.md#a-marketplace-in-a-repository-subdirectory) for a worked example.
+
 ### Spec detection
 
 | Spec form | Detected as |

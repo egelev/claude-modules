@@ -1,7 +1,7 @@
 import { mkdir, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Harness, githubSource } from "./helpers/harness.js";
+import { Harness, githubSource, settingsSource } from "./helpers/harness.js";
 
 describe("create", () => {
   let h: Harness;
@@ -167,6 +167,18 @@ describe("create --from-scope", () => {
 
     expect(result.code).toBe(0);
     expect(result.stderr).toContain("machine-specific");
+  });
+
+  it("does not warn when it captures a settings marketplace", async () => {
+    await h.writeSettings("project", {
+      enabledPlugins: { "a@inline-mp": true },
+      extraKnownMarketplaces: { "inline-mp": settingsSource("inline-mp") },
+    });
+
+    const result = await h.run(["create", "captured", "--from-scope", "project"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("machine-specific");
   });
 
   it("does not warn for a portable github marketplace", async () => {

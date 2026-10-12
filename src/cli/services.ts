@@ -61,7 +61,7 @@ export function buildServices(env: NodeJS.ProcessEnv, logger: Logger): CliServic
   const installedPluginsCache = new InstalledPluginsCache(paths);
   const marketplaceCacheInstaller = new MarketplaceCacheInstaller(knownMarketplacesCache, logger, env);
   const pluginCacheInstaller = new PluginCacheInstaller(knownMarketplacesCache, installedPluginsCache, logger, env);
-  const moduleUpdater = new ModuleUpdater(logger, env);
+  const moduleUpdater = new ModuleUpdater(knownMarketplacesCache, logger, env);
   const settingsRepository = new SettingsRepository();
   const settingsApplier = new SettingsApplier(logger);
   const moduleListFile = new ModuleListFile(paths, repoLocator);

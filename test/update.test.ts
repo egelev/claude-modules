@@ -1,5 +1,9 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CompositionResolver } from "../src/core/CompositionResolver.js";
+import { KnownMarketplacesCache } from "../src/core/KnownMarketplacesCache.js";
 import { ModuleListFile } from "../src/core/ModuleListFile.js";
 import { ModuleResolver } from "../src/core/ModuleResolver.js";
 import { ModuleStore } from "../src/core/ModuleStore.js";
@@ -12,7 +16,12 @@ import { UpdateCommand } from "../src/cli/commands/UpdateCommand.js";
 import { CliError } from "../src/util/errors.js";
 import { Logger, LogLevel } from "../src/util/Logger.js";
 import { Paths } from "../src/util/Paths.js";
-import { Harness, githubSource } from "./helpers/harness.js";
+import { Harness, githubSource, settingsSource } from "./helpers/harness.js";
+
+/** A Claude Code home with no known_marketplaces.json — every marketplace reads as unregistered. */
+function noKnownMarketplaces(): KnownMarketplacesCache {
+  return new KnownMarketplacesCache(new Paths({ CLAUDE_CONFIG_DIR: join(tmpdir(), "claude-modules-no-such-home") }));
+}
 
 /**
  * ModuleUpdater is unit-tested directly with a fake ClaudeRunner, the same seam
@@ -20,7 +29,7 @@ import { Harness, githubSource } from "./helpers/harness.js";
  */
 describe("ModuleUpdater", () => {
   function build(runs: string[][], result: ClaudeRunResult = { ok: true, stdout: "" }) {
-    return new ModuleUpdater(new Logger(LogLevel.ERROR), {}, async (args) => {
+    return new ModuleUpdater(noKnownMarketplaces(), new Logger(LogLevel.ERROR), {}, async (args) => {
       runs.push(args);
       return result;
     });
@@ -86,7 +95,7 @@ describe("ModuleUpdater", () => {
 
   it("reports per-item success/failure independently", async () => {
     const runs: string[][] = [];
-    const updater = new ModuleUpdater(new Logger(LogLevel.ERROR), {}, async (args) => {
+    const updater = new ModuleUpdater(noKnownMarketplaces(), new Logger(LogLevel.ERROR), {}, async (args) => {
       runs.push(args);
       return args[0] === "plugin" && args[1] === "update"
         ? { ok: false, detail: "not installed" }
@@ -99,6 +108,63 @@ describe("ModuleUpdater", () => {
     expect(result.failedMarketplaceNames).toEqual([]);
     expect(result.updatedPluginKeys).toEqual([]);
     expect(result.failedPluginKeys).toEqual(["a@mp", "b@mp"]);
+  });
+  it("skips, without failing, a marketplace Claude Code registers from settings.json and hasn't yet", async () => {
+    const runs: string[][] = [];
+
+    const result = await build(runs).update(
+      resolved({
+        enabledPluginNames: new Set(["a@inline-mp", "b@mp"]),
+        extraKnownMarketplaces: { "inline-mp": settingsSource("inline-mp"), mp: githubSource("owner/repo") },
+      }),
+      Scope.User,
+      false
+    );
+
+    expect(runs).toEqual([
+      ["plugin", "marketplace", "update", "mp"],
+      ["plugin", "update", "b@mp", "--scope", "user", "-y"],
+    ]);
+    expect(result.failedMarketplaceNames).toEqual([]);
+    expect(result.failedPluginKeys).toEqual([]);
+  });
+
+  it("updates a settings marketplace normally once Claude Code has registered it", async () => {
+    const claudeHome = await mkdtemp(join(tmpdir(), "claude-home-"));
+    try {
+      await mkdir(join(claudeHome, "plugins"), { recursive: true });
+      await writeFile(
+        join(claudeHome, "plugins", "known_marketplaces.json"),
+        JSON.stringify({ "inline-mp": settingsSource("inline-mp") }),
+        "utf8"
+      );
+      const runs: string[][] = [];
+      const updater = new ModuleUpdater(
+        new KnownMarketplacesCache(new Paths({ CLAUDE_CONFIG_DIR: claudeHome })),
+        new Logger(LogLevel.ERROR),
+        {},
+        async (args) => {
+          runs.push(args);
+          return { ok: true, stdout: "" };
+        }
+      );
+
+      await updater.update(
+        resolved({
+          enabledPluginNames: new Set(["a@inline-mp"]),
+          extraKnownMarketplaces: { "inline-mp": settingsSource("inline-mp") },
+        }),
+        Scope.User,
+        false
+      );
+
+      expect(runs).toEqual([
+        ["plugin", "marketplace", "update", "inline-mp"],
+        ["plugin", "update", "a@inline-mp", "--scope", "user", "-y"],
+      ]);
+    } finally {
+      await rm(claudeHome, { recursive: true, force: true });
+    }
   });
 });
 
@@ -139,7 +205,7 @@ describe("UpdateCommand", () => {
         h.repoRoot,
         moduleResolver,
         moduleListFile,
-        new ModuleUpdater(new Logger(LogLevel.ERROR), {}, async (args) => {
+        new ModuleUpdater(noKnownMarketplaces(), new Logger(LogLevel.ERROR), {}, async (args) => {
           runs.push(args);
           return result;
         }),

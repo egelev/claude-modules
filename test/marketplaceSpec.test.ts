@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseMarketplaceSpec } from "../src/core/marketplaceSpec.js";
+import {
+  classifyMarketplaceSource,
+  marketplacePortability,
+  parseMarketplaceSpec,
+} from "../src/core/marketplaceSpec.js";
 
 describe("parseMarketplaceSpec", () => {
   describe("bare GitHub shorthand", () => {
@@ -124,5 +128,52 @@ describe("parseMarketplaceSpec", () => {
         source: { source: { source: "local", path: "./some/path#fragment" } },
       });
     });
+  });
+});
+
+describe("classifyMarketplaceSource", () => {
+  it("recognizes every source type Claude Code accepts, plus this tool's own 'local'", () => {
+    for (const kind of ["github", "git", "url", "settings", "directory", "file", "local"]) {
+      expect(classifyMarketplaceSource({ source: { source: kind } })).toBe(kind);
+    }
+  });
+
+  it("is unrecognized for anything else", () => {
+    expect(classifyMarketplaceSource({ source: { source: "npm" } })).toBe("unrecognized");
+    expect(classifyMarketplaceSource({ source: "github" })).toBe("unrecognized");
+    expect(classifyMarketplaceSource({ nope: true })).toBe("unrecognized");
+    expect(classifyMarketplaceSource(undefined)).toBe("unrecognized");
+  });
+});
+
+describe("marketplacePortability", () => {
+  it("treats remote sources and an inline settings catalog as portable", () => {
+    expect(marketplacePortability({ source: { source: "github", repo: "owner/repo" } })).toBe("portable");
+    expect(marketplacePortability({ source: { source: "settings", name: "mp", plugins: [] } })).toBe("portable");
+    expect(marketplacePortability({ source: { source: "url", url: "https://example.com/marketplace.json" } })).toBe(
+      "portable"
+    );
+    expect(marketplacePortability({ source: { source: "git", url: "https://example.com/mp.git" } })).toBe("portable");
+    expect(marketplacePortability({ source: { source: "git", url: "git@example.com:team/mp.git" } })).toBe("portable");
+  });
+
+  it("treats sources that name a path on this machine as machine-specific", () => {
+    expect(marketplacePortability({ source: { source: "directory", path: "/home/someone/mp" } })).toBe(
+      "machine-specific"
+    );
+    expect(marketplacePortability({ source: { source: "file", path: "/home/someone/marketplace.json" } })).toBe(
+      "machine-specific"
+    );
+    expect(marketplacePortability({ source: { source: "local", path: "/home/someone/mp" } })).toBe("machine-specific");
+    expect(marketplacePortability({ source: { source: "git", url: "file:///home/someone/mp.git" } })).toBe(
+      "machine-specific"
+    );
+    expect(marketplacePortability({ source: { source: "git", url: "/home/someone/mp.git" } })).toBe("machine-specific");
+  });
+
+  it("stays unrecognized for unfamiliar or malformed shapes, rather than guessing", () => {
+    expect(marketplacePortability({ nope: true })).toBe("unrecognized");
+    expect(marketplacePortability({ source: { source: "git" } })).toBe("unrecognized");
+    expect(marketplacePortability({ source: { source: "url" } })).toBe("unrecognized");
   });
 });

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Cli } from "../../src/cli/Cli.js";
 import { ClaudeSettings } from "../../src/core/types.js";
+import { Logger } from "../../src/util/Logger.js";
 
 export interface CliResult {
   code: number;
@@ -152,4 +153,30 @@ export class Harness {
 /** A marketplace source in the shape modules and settings.json both use. */
 export function githubSource(repo: string): { source: { source: string; repo: string } } {
   return { source: { source: "github", repo } };
+}
+
+/** An inline `settings` marketplace source — portable, but only expressible in settings.json. */
+export function settingsSource(name: string): { source: Record<string, unknown> } {
+  return {
+    source: {
+      source: "settings",
+      name,
+      owner: { name: "someone" },
+      plugins: [{ name: "a", source: { source: "git-subdir", url: "owner/monorepo", path: "plugins/a" } }],
+    },
+  };
+}
+
+/** Captures messages by level instead of printing them, to assert info-vs-warning. */
+export class RecordingLogger extends Logger {
+  readonly infos: string[] = [];
+  readonly warnings: string[] = [];
+
+  override info(message: string): void {
+    this.infos.push(message);
+  }
+
+  override warn(message: string): void {
+    this.warnings.push(message);
+  }
 }
