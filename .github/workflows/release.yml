@@ -65,7 +65,7 @@ jobs:
       # No registry-url: that makes setup-node write an `_authToken` line into .npmrc, which
       # interferes with the OIDC exchange when no token is set. npm's default registry is
       # registry.npmjs.org already. (actions/setup-node#1551, npm/documentation#1960)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
